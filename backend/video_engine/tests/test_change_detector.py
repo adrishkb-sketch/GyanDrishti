@@ -1,6 +1,9 @@
 import pytest
 import numpy as np
-from backend.video_engine.frames.change_detector import ChangeDetector
+try:
+    from backend.video_engine.frames.change_detector import ChangeDetector
+except ImportError:
+    from video_engine.frames.change_detector import ChangeDetector
 
 def test_change_detector():
     detector = ChangeDetector(threshold=0.1)

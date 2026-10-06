@@ -1,5 +1,8 @@
 import pytest
-from backend.video_engine.frames.sampler import FrameSampler
+try:
+    from backend.video_engine.frames.sampler import FrameSampler
+except ImportError:
+    from video_engine.frames.sampler import FrameSampler
 
 def test_sampler():
     sampler = FrameSampler(2.0)
