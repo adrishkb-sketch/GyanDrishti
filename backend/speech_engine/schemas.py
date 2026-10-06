@@ -28,6 +28,10 @@ class TranscriptionSegment(BaseModel):
         default_factory=list,
         description="List of detected languages in this segment (e.g. ['en'], ['hi', 'en'], ['bn', 'en'])",
     )
+    script: Optional[List[str]] = Field(
+        default=None,
+        description="Detected writing scripts in this segment (e.g. ['Bengali'], ['Devanagari'], ['Latin'])",
+    )
     confidence: Optional[float] = Field(
         default=None,
         description="Model confidence score if reliably provided; null otherwise. Never fabricated.",

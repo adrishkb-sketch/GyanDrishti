@@ -58,6 +58,23 @@ def detect_script_presence(text: str) -> dict[str, int]:
     }
 
 
+def detect_segment_scripts(text: str, min_char_count: int = 1) -> List[str]:
+    """Identifies the writing scripts present in text.
+
+    Returns:
+        Sorted list containing any of 'Bengali', 'Devanagari', 'Latin'.
+    """
+    counts = detect_script_presence(text)
+    scripts: List[str] = []
+    if counts["bengali"] >= min_char_count:
+        scripts.append("Bengali")
+    if counts["devanagari"] >= min_char_count:
+        scripts.append("Devanagari")
+    if counts["latin"] >= min_char_count:
+        scripts.append("Latin")
+    return sorted(scripts)
+
+
 def detect_romanized_indic_tokens(text: str) -> tuple[bool, bool]:
     """Checks whether Latin text contains recognizable Hinglish or Banglish tokens.
 

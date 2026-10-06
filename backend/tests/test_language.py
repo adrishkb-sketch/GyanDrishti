@@ -5,6 +5,7 @@ from speech_engine.language import (
     detect_romanized_indic_tokens,
     detect_script_presence,
     detect_segment_languages,
+    detect_segment_scripts,
 )
 from speech_engine.schemas import TranscriptionSegment
 
@@ -73,3 +74,12 @@ def test_aggregate_languages() -> None:
     ]
     summary = aggregate_languages(segments)
     assert summary == ["bn", "en", "hi"]
+
+
+def test_detect_segment_scripts() -> None:
+    assert detect_segment_scripts("Hello World") == ["Latin"]
+    assert detect_segment_scripts("বাংলা ভাষা") == ["Bengali"]
+    assert detect_segment_scripts("हिंदी भाषा") == ["Devanagari"]
+    assert detect_segment_scripts("বাংলা and English") == ["Bengali", "Latin"]
+    assert detect_segment_scripts("বাংলা, हिंदी and English") == ["Bengali", "Devanagari", "Latin"]
+

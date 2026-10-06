@@ -116,6 +116,10 @@ class FasterWhisperASR(BaseASRModel):
         sample_rate: int = 16000,
         language: Optional[str] = None,
         vad_filter: bool = True,
+        initial_prompt: Optional[str] = None,
+        condition_on_previous_text: bool = True,
+        beam_size: int = 5,
+        repetition_penalty: float = 1.0,
     ) -> Tuple[List[TranscriptionSegment], Optional[str]]:
         """Transcribes audio array into timestamped segments.
 
@@ -133,7 +137,10 @@ class FasterWhisperASR(BaseASRModel):
             audio=audio,
             language=language,
             task="transcribe",  # Strictly preserve original spoken language
-            beam_size=5,
+            beam_size=beam_size,
+            initial_prompt=initial_prompt,
+            condition_on_previous_text=condition_on_previous_text,
+            repetition_penalty=repetition_penalty,
             vad_filter=vad_filter,
             vad_parameters=vad_params,
             temperature=0.0,

@@ -22,7 +22,11 @@ from speech_engine.audio import (
     record_microphone,
     save_wav,
 )
-from speech_engine.language import aggregate_languages, detect_segment_languages
+from speech_engine.language import (
+    aggregate_languages,
+    detect_segment_languages,
+    detect_segment_scripts,
+)
 from speech_engine.models import DEFAULT_MODEL_NAME
 from speech_engine.schemas import TranscriptionResult, TranscriptionSegment
 
@@ -41,6 +45,7 @@ def _postprocess_segments(
             text=seg.text,
             model_language=model_language,
         )
+        segment_scripts = detect_segment_scripts(seg.text)
         processed.append(
             TranscriptionSegment(
                 id=seg.id,
@@ -48,6 +53,7 @@ def _postprocess_segments(
                 end=seg.end,
                 text=seg.text,
                 language=segment_langs,
+                script=segment_scripts if segment_scripts else None,
                 confidence=None,  # Preserves honesty: strictly null
                 words=seg.words,
             )
@@ -64,6 +70,8 @@ def transcribe_chunk(
     vad: bool = True,
     lecture_id: Optional[str] = None,
     offline_only: bool = False,
+    initial_prompt: Optional[str] = None,
+    condition_on_previous_text: bool = True,
 ) -> TranscriptionResult:
     """Transcribes an in-memory audio chunk.
 
@@ -76,6 +84,8 @@ def transcribe_chunk(
         vad: Whether to apply VAD silence filtering.
         lecture_id: Optional identifier for lecture/session.
         offline_only: If True, requires local model weights without internet.
+        initial_prompt: Optional prompt text to guide decoder language or terminology.
+        condition_on_previous_text: Whether to condition subsequent segments on prior decoded text.
 
     Returns:
         TranscriptionResult object.
@@ -102,12 +112,21 @@ def transcribe_chunk(
     )
 
     t0 = time.perf_counter()
-    raw_segments, detected_model_lang = engine.transcribe(
-        audio=audio,
-        sample_rate=sample_rate,
-        language=language,
-        vad_filter=vad,
-    )
+    transcribe_kwargs = {
+        "audio": audio,
+        "sample_rate": sample_rate,
+        "language": language,
+        "vad_filter": vad,
+    }
+    # Pass optional decoding params if accepted by the engine
+    import inspect
+    sig = inspect.signature(engine.transcribe)
+    if "initial_prompt" in sig.parameters:
+        transcribe_kwargs["initial_prompt"] = initial_prompt
+    if "condition_on_previous_text" in sig.parameters:
+        transcribe_kwargs["condition_on_previous_text"] = condition_on_previous_text
+
+    raw_segments, detected_model_lang = engine.transcribe(**transcribe_kwargs)
     t1 = time.perf_counter()
 
     proc_time = max(0.001, t1 - t0)
@@ -143,6 +162,8 @@ def transcribe_file(
     models_dir: Optional[Path] = None,
     offline_only: bool = False,
     asr_engine: Optional[BaseASRModel] = None,
+    initial_prompt: Optional[str] = None,
+    condition_on_previous_text: bool = True,
 ) -> TranscriptionResult:
     """Transcribes an audio file from disk (WAV, MP3, M4A).
 
@@ -155,6 +176,8 @@ def transcribe_file(
         models_dir: Custom directory for model weights.
         offline_only: Require weights locally without internet.
         asr_engine: Pre-warmed ASR engine.
+        initial_prompt: Optional prompt text to guide decoder language or terminology.
+        condition_on_previous_text: Whether to condition subsequent segments on prior decoded text.
 
     Returns:
         TranscriptionResult object.
@@ -177,6 +200,8 @@ def transcribe_file(
         vad=vad,
         lecture_id=lecture_id,
         offline_only=offline_only,
+        initial_prompt=initial_prompt,
+        condition_on_previous_text=condition_on_previous_text,
     )
     result.audio_path = str(path)
     return result
@@ -193,6 +218,8 @@ def transcribe_microphone(
     device_id: Optional[int] = None,
     offline_only: bool = False,
     asr_engine: Optional[BaseASRModel] = None,
+    initial_prompt: Optional[str] = None,
+    condition_on_previous_text: bool = True,
 ) -> TranscriptionResult:
     """Records audio from the microphone and runs local transcription.
 
@@ -207,6 +234,8 @@ def transcribe_microphone(
         device_id: Specific microphone input device ID.
         offline_only: Require local model weights.
         asr_engine: Pre-warmed engine.
+        initial_prompt: Optional prompt text to guide decoder.
+        condition_on_previous_text: Whether to condition on previous decoded text.
 
     Returns:
         TranscriptionResult object.
@@ -238,6 +267,8 @@ def transcribe_microphone(
         vad=vad,
         lecture_id=lecture_id,
         offline_only=offline_only,
+        initial_prompt=initial_prompt,
+        condition_on_previous_text=condition_on_previous_text,
     )
     result.audio_path = str(save_path)
 
