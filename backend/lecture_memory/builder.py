@@ -7,8 +7,9 @@ a canonical, immutable, evidence-grounded LectureMemory instance.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Union
 
 from temporal_engine.schemas import LectureTimeline, SynchronizedEvent
 from understanding_engine.schemas import LectureUnderstanding
@@ -54,6 +55,7 @@ class LectureMemoryBuilder:
         subject: Optional[str] = None,
         date: Optional[str] = None,
         created_at: Optional[str] = None,
+        visual_analysis: Optional[Union[List[Any], Dict[str, Any]]] = None,
     ) -> LectureMemory:
         """Builds a canonical LectureMemory instance from timeline and understanding evidence.
 
@@ -240,6 +242,29 @@ class LectureMemoryBuilder:
         visual_references: List[MemoryVisualReference] = []
         seen_visual_paths: Set[str] = set()
 
+        # Index visual analysis results if provided
+        visual_analysis_by_key: Dict[str, Any] = {}
+        if visual_analysis:
+            if isinstance(visual_analysis, dict):
+                for k, v in visual_analysis.items():
+                    visual_analysis_by_key[k] = v
+                    src_img = getattr(v, "source_image", None) or (v.get("source_image") if isinstance(v, dict) else None)
+                    kf_id = getattr(v, "keyframe_id", None) or (v.get("keyframe_id") if isinstance(v, dict) else None)
+                    if src_img:
+                        visual_analysis_by_key[src_img] = v
+                        visual_analysis_by_key[os.path.basename(src_img)] = v
+                    if kf_id:
+                        visual_analysis_by_key[kf_id] = v
+            elif isinstance(visual_analysis, list):
+                for v in visual_analysis:
+                    kf_id = getattr(v, "keyframe_id", None) or (v.get("keyframe_id") if isinstance(v, dict) else None)
+                    src_img = getattr(v, "source_image", None) or (v.get("source_image") if isinstance(v, dict) else None)
+                    if kf_id:
+                        visual_analysis_by_key[kf_id] = v
+                    if src_img:
+                        visual_analysis_by_key[src_img] = v
+                        visual_analysis_by_key[os.path.basename(src_img)] = v
+
         for u in understandings:
             for vr in u.visual_references:
                 v_key = f"{vr.frame_path or ''}_{vr.timestamp}"
@@ -253,6 +278,41 @@ class LectureMemoryBuilder:
                     event_type=vr.event_type,
                 )
 
+                frame_ref = vr.frame_path or ""
+                kf_id_guess = os.path.splitext(os.path.basename(frame_ref))[0] if frame_ref else None
+                matched_ocr = (
+                    visual_analysis_by_key.get(frame_ref)
+                    or visual_analysis_by_key.get(os.path.basename(frame_ref))
+                    or (visual_analysis_by_key.get(kf_id_guess) if kf_id_guess else None)
+                )
+
+                extracted_text = None
+                ocr_conf = None
+                ocr_status = "ocr_pending"
+                pot_eqs = []
+
+                if matched_ocr:
+                    extracted_text = (
+                        getattr(matched_ocr, "raw_text_combined", None)
+                        or (matched_ocr.get("raw_text_combined") if isinstance(matched_ocr, dict) else None)
+                    )
+                    ocr_conf = (
+                        getattr(matched_ocr, "overall_confidence", None)
+                        if hasattr(matched_ocr, "overall_confidence")
+                        else (matched_ocr.get("overall_confidence") if isinstance(matched_ocr, dict) else None)
+                    )
+                    status_val = (
+                        getattr(matched_ocr, "processing_status", "ocr_pending")
+                        if hasattr(matched_ocr, "processing_status")
+                        else (matched_ocr.get("processing_status", "ocr_pending") if isinstance(matched_ocr, dict) else "ocr_pending")
+                    )
+                    ocr_status = status_val.value if hasattr(status_val, "value") else str(status_val)
+                    pot_eqs = (
+                        getattr(matched_ocr, "potential_equations", [])
+                        if hasattr(matched_ocr, "potential_equations")
+                        else (matched_ocr.get("potential_equations", []) if isinstance(matched_ocr, dict) else [])
+                    )
+
                 visual_references.append(
                     MemoryVisualReference(
                         timestamp=vr.timestamp,
@@ -260,6 +320,76 @@ class LectureMemoryBuilder:
                         event_type=vr.event_type.replace("_", " ").title(),
                         local_frame_reference=vr.frame_path or f"Frame at {vr.timestamp:.1f}s",
                         description=vr.relevance,
+                        keyframe_id=kf_id_guess,
+                        extracted_text=extracted_text,
+                        ocr_confidence=ocr_conf,
+                        ocr_status=ocr_status,
+                        potential_equations=pot_eqs,
+                        provenance=prov,
+                    )
+                )
+
+        # Also ingest any keyframes present in timeline that were not in understandings
+        if timeline:
+            for kf_evt in timeline.get_keyframes():
+                v_key = f"{kf_evt.frame_path}_{kf_evt.timestamp}"
+                if v_key in seen_visual_paths:
+                    continue
+                seen_visual_paths.add(v_key)
+
+                prov = create_visual_provenance(
+                    timestamp=kf_evt.timestamp,
+                    frame_path=kf_evt.frame_path,
+                    event_type=kf_evt.type,
+                )
+
+                frame_ref = kf_evt.frame_path
+                kf_id_guess = os.path.splitext(os.path.basename(frame_ref))[0]
+                matched_ocr = (
+                    visual_analysis_by_key.get(frame_ref)
+                    or visual_analysis_by_key.get(os.path.basename(frame_ref))
+                    or visual_analysis_by_key.get(kf_id_guess)
+                )
+
+                extracted_text = None
+                ocr_conf = None
+                ocr_status = "ocr_pending"
+                pot_eqs = []
+
+                if matched_ocr:
+                    extracted_text = (
+                        getattr(matched_ocr, "raw_text_combined", None)
+                        or (matched_ocr.get("raw_text_combined") if isinstance(matched_ocr, dict) else None)
+                    )
+                    ocr_conf = (
+                        getattr(matched_ocr, "overall_confidence", None)
+                        if hasattr(matched_ocr, "overall_confidence")
+                        else (matched_ocr.get("overall_confidence") if isinstance(matched_ocr, dict) else None)
+                    )
+                    status_val = (
+                        getattr(matched_ocr, "processing_status", "ocr_pending")
+                        if hasattr(matched_ocr, "processing_status")
+                        else (matched_ocr.get("processing_status", "ocr_pending") if isinstance(matched_ocr, dict) else "ocr_pending")
+                    )
+                    ocr_status = status_val.value if hasattr(status_val, "value") else str(status_val)
+                    pot_eqs = (
+                        getattr(matched_ocr, "potential_equations", [])
+                        if hasattr(matched_ocr, "potential_equations")
+                        else (matched_ocr.get("potential_equations", []) if isinstance(matched_ocr, dict) else [])
+                    )
+
+                visual_references.append(
+                    MemoryVisualReference(
+                        timestamp=kf_evt.timestamp,
+                        source=kf_evt.source.title(),
+                        event_type=kf_evt.type.replace("_", " ").title(),
+                        local_frame_reference=frame_ref,
+                        description="Keyframe captured from lecture visual stream",
+                        keyframe_id=kf_id_guess,
+                        extracted_text=extracted_text,
+                        ocr_confidence=ocr_conf,
+                        ocr_status=ocr_status,
+                        potential_equations=pot_eqs,
                         provenance=prov,
                     )
                 )

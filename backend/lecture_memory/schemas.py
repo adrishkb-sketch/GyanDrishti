@@ -97,12 +97,37 @@ class MemoryVisualReference(BaseModel):
         default=None,
         description="Contextual explanation connecting visual event to spoken context",
     )
+    keyframe_id: Optional[str] = Field(default=None, description="Identifier of the keyframe")
+    event_id: Optional[str] = Field(default=None, description="Visual event identifier")
+    extracted_text: Optional[str] = Field(
+        default=None,
+        description="Text recognized by local OCR on keyframe",
+    )
+    ocr_confidence: Optional[float] = Field(
+        default=None,
+        description="Confidence of visual OCR recognition bounded in [0.0, 1.0]",
+    )
+    ocr_status: str = Field(
+        default="ocr_pending",
+        description="OCR status: 'ocr_pending', 'success', 'no_text_detected', 'uncertain', 'failed'",
+    )
+    potential_equations: List[str] = Field(
+        default_factory=list,
+        description="Candidate equations identified in visual text",
+    )
     provenance: Provenance = Field(..., description="Evidence provenance trace")
 
     @field_validator("timestamp", mode="after")
     @classmethod
     def round_ts(cls, v: float) -> float:
         return round(float(v), 2)
+
+    @field_validator("ocr_confidence", mode="after")
+    @classmethod
+    def clamp_ocr_confidence(cls, v: Optional[float]) -> Optional[float]:
+        if v is None:
+            return None
+        return round(max(0.0, min(1.0, float(v))), 4)
 
 
 class MemoryQuestionCandidate(BaseModel):
@@ -298,6 +323,11 @@ class LectureMemory(BaseModel):
                     "event_type": vr.event_type,
                     "local_frame_reference": vr.local_frame_reference,
                     "description": vr.description,
+                    "keyframe_id": vr.keyframe_id,
+                    "extracted_text": vr.extracted_text,
+                    "ocr_confidence": round(vr.ocr_confidence, 2) if vr.ocr_confidence is not None else None,
+                    "ocr_status": vr.ocr_status,
+                    "potential_equations": vr.potential_equations,
                 }
                 for vr in self.visual_references
             ],
