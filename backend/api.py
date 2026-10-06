@@ -16,6 +16,12 @@ from video_engine.frames.change_detector import ChangeDetector
 from video_engine.frames.keyframes import KeyframeExtractor
 from video_engine.storage.manifest import ManifestGenerator
 from video_engine.schemas import Manifest
+from lecture_memory.storage import (
+    LectureMemoryStorage,
+    MemoryNotFoundError,
+    CorruptMemoryError,
+    InvalidSessionIdError,
+)
 
 app = FastAPI(title="GyanDrishti API")
 
@@ -191,6 +197,27 @@ def stop_session():
 @app.get("/api/video/session/status")
 def session_status():
     return manager.get_status()
+
+# Lecture Memory Endpoints
+memory_storage = LectureMemoryStorage()
+
+@app.get("/api/lectures")
+def list_lectures():
+    """Returns index of all locally persisted lecture memories."""
+    return {"lectures": memory_storage.list_lectures()}
+
+@app.get("/api/lectures/{session_id}")
+def get_lecture_memory(session_id: str):
+    """Retrieves full canonical lecture memory formatted for frontend viewer."""
+    try:
+        memory = memory_storage.load(session_id)
+        return memory.to_frontend_dict()
+    except MemoryNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Lecture memory '{session_id}' not found")
+    except InvalidSessionIdError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except CorruptMemoryError as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
