@@ -12,7 +12,13 @@ import sys
 import time
 from pathlib import Path
 
-from speech_engine.audio import list_microphones
+from speech_engine.audio import (
+    calculate_audio_metrics,
+    get_device_info,
+    list_microphones,
+    record_raw_audio,
+    save_wav,
+)
 from speech_engine.models import (
     AVAILABLE_MODELS,
     DEFAULT_MODEL_NAME,
@@ -209,9 +215,80 @@ def cmd_devices(args: argparse.Namespace) -> int:
         print("No input devices detected.")
         return 0
     for dev in devs:
-        print(f"  [ID {dev['id']}] {dev['name']} ({dev['channels']} channel(s), {dev['default_sr']} Hz)")
+        default_tag = " [DEFAULT]" if dev.get("is_default") else ""
+        print(f"  [ID {dev['id']}] {dev['name']}{default_tag} ({dev['channels']} channel(s), {dev['default_sr']} Hz)")
     print()
     return 0
+
+
+def cmd_mic_test(args: argparse.Namespace) -> int:
+    """Performs raw microphone diagnostics without VAD or ASR."""
+    _print_banner()
+    duration = getattr(args, "duration", 5.0) or 5.0
+    device_id = getattr(args, "device", None)
+
+    try:
+        dev_info = get_device_info(device_id)
+    except Exception as e:
+        print(f"[ERROR] Failed to query audio device: {e}", file=sys.stderr)
+        return 1
+
+    print("Microphone test")
+    print(f"Device:      {dev_info['name']} [ID {dev_info['id']}]")
+    print(f"Sample rate: 16000 Hz (native hardware: {int(dev_info['default_sr'])} Hz)")
+    print(f"Channels:    1")
+    print(f"Duration:    {duration:.1f} sec\n")
+    print(">> Recording raw audio... Please speak into your microphone now...")
+
+    try:
+        raw_audio = record_raw_audio(duration=duration, device_id=int(dev_info["id"]))
+    except PermissionError as e:
+        print(f"\n[ERROR: Microphone Permission Denied]\n{e}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"\n[ERROR: Recording failed]\n{e}", file=sys.stderr)
+        return 1
+
+    metrics = calculate_audio_metrics(raw_audio.samples)
+    rms = metrics["rms"]
+    peak = metrics["peak"]
+    is_silent = metrics["is_silent"]
+
+    # Save test WAV locally without modifying raw levels
+    if args.output:
+        save_path = Path(args.output)
+    else:
+        recordings_dir = Path(__file__).resolve().parent.parent / "recordings"
+        save_path = recordings_dir / "mic_test.wav"
+    save_wav(save_path, raw_audio.samples, raw_audio.sample_rate)
+
+    print("\n" + "-" * 50)
+    print(f"RMS amplitude:   {rms:.4f}")
+    print(f"Peak amplitude:  {peak:.4f}")
+    print(f"Non-zero samples: {metrics['non_zero_count']} ({metrics['non_zero_percent']}%)")
+    print("-" * 50)
+
+    if not is_silent:
+        print("Speech/audio detected: YES")
+        print(f"\n>> Captured audio saved to: {save_path}")
+        print(">> Microphone input stream is delivering real non-silent audio.")
+        return 0
+    else:
+        print("Speech/audio detected: NO")
+        print(f"\n[DIAGNOSTIC ALERT: SILENT INPUT DETECTED]")
+        print("The captured audio stream returned pure digital silence (0.0000).")
+        print("On macOS, when an application lacks Microphone permission in TCC,")
+        print("CoreAudio does NOT raise an error; it silently feeds all zeros.\n")
+        print("HOW TO RESOLVE:")
+        print("1. If running inside Antigravity IDE's integrated terminal:")
+        print("   - Open 'System Settings' -> 'Privacy & Security' -> 'Microphone'.")
+        print("   - Check if 'Antigravity IDE' (or 'Antigravity') is listed and toggle it ON.")
+        print("2. If Antigravity IDE is not listed or not prompted:")
+        print("   - Open macOS native Terminal (/System/Applications/Utilities/Terminal.app).")
+        print("   - Navigate to GyanDrishti/backend and run the test there.")
+        print("   - macOS will display the system permission prompt for Terminal immediately.")
+        print(f"\n>> Saved silent diagnostic file to: {save_path}")
+        return 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -325,6 +402,27 @@ def build_parser() -> argparse.ArgumentParser:
     # Command: devices
     subparsers.add_parser("devices", help="List audio input devices (microphones)")
 
+    # Command: mic-test
+    mt_parser = subparsers.add_parser("mic-test", help="Diagnose raw microphone input levels without VAD/ASR")
+    mt_parser.add_argument(
+        "--duration", "-d",
+        type=float,
+        default=5.0,
+        help="Test recording duration in seconds (default: 5.0s)",
+    )
+    mt_parser.add_argument(
+        "--device",
+        type=int,
+        default=None,
+        help="Input device ID to test (default: system default input)",
+    )
+    mt_parser.add_argument(
+        "--output", "-o",
+        type=str,
+        default=None,
+        help="Path to save the test WAV file (default: backend/recordings/mic_test.wav)",
+    )
+
     return parser
 
 
@@ -342,6 +440,7 @@ def main() -> None:
         "download": cmd_download,
         "models": cmd_models,
         "devices": cmd_devices,
+        "mic-test": cmd_mic_test,
     }
 
     handler = dispatch.get(args.command)

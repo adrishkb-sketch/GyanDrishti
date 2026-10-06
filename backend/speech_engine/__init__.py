@@ -8,10 +8,14 @@ from speech_engine.asr import BaseASRModel, FasterWhisperASR
 from speech_engine.audio import (
     AudioInput,
     STANDARD_SAMPLE_RATE,
+    calculate_audio_metrics,
+    get_default_input_device,
+    get_device_info,
     list_microphones,
     load_audio,
     normalize_audio,
     record_microphone,
+    record_raw_audio,
     save_wav,
 )
 from speech_engine.language import aggregate_languages, detect_segment_languages

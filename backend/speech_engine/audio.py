@@ -172,17 +172,79 @@ def save_wav(
     return path
 
 
+def get_default_input_device() -> Optional[int]:
+    """Returns the system default input device ID, or the first device with input channels."""
+    try:
+        default_in = sd.default.device[0]
+        if default_in is not None and default_in >= 0:
+            info = sd.query_devices(default_in)
+            if info.get("max_input_channels", 0) > 0:
+                return int(default_in)
+    except Exception:
+        pass
+
+    devices = sd.query_devices()
+    for idx, dev in enumerate(devices):
+        if dev.get("max_input_channels", 0) > 0:
+            return idx
+    return None
+
+
+def get_device_info(device_id: Optional[int] = None) -> dict[str, Union[int, str, float]]:
+    """Returns verified information for the target input device."""
+    target_id = device_id if device_id is not None else get_default_input_device()
+    if target_id is None:
+        raise RuntimeError("No audio input devices (microphones) found on this system.")
+
+    info = sd.query_devices(target_id)
+    return {
+        "id": target_id,
+        "name": str(info.get("name", "Unknown")),
+        "channels": int(info.get("max_input_channels", 0)),
+        "default_sr": float(info.get("default_samplerate", 44100)),
+    }
+
+
+def calculate_audio_metrics(samples: np.ndarray) -> dict[str, Union[float, int, bool]]:
+    """Calculates RMS, peak amplitude, and non-zero counts to diagnose silence vs speech."""
+    if len(samples) == 0:
+        return {
+            "peak": 0.0,
+            "rms": 0.0,
+            "non_zero_count": 0,
+            "non_zero_percent": 0.0,
+            "is_silent": True,
+        }
+
+    peak = float(np.max(np.abs(samples)))
+    rms = float(np.sqrt(np.mean(samples**2) + 1e-12))
+    non_zero = int(np.count_nonzero(samples))
+    percent = (non_zero / float(len(samples))) * 100.0
+    is_silent = (peak < 0.005) or (rms < 0.001)
+
+    return {
+        "peak": round(peak, 5),
+        "rms": round(rms, 5),
+        "non_zero_count": non_zero,
+        "non_zero_percent": round(percent, 2),
+        "is_silent": is_silent,
+    }
+
+
 def list_microphones() -> List[dict[str, Union[int, str]]]:
     """Lists available audio input devices."""
     devices = sd.query_devices()
     input_devs: List[dict[str, Union[int, str]]] = []
+    default_in = get_default_input_device()
     for idx, dev in enumerate(devices):
         if dev.get("max_input_channels", 0) > 0:
+            is_default = (idx == default_in)
             input_devs.append({
                 "id": idx,
                 "name": str(dev.get("name", "Unknown")),
                 "channels": int(dev.get("max_input_channels", 1)),
                 "default_sr": float(dev.get("default_samplerate", 44100)),
+                "is_default": is_default,
             })
     return input_devs
 
@@ -193,21 +255,27 @@ def record_microphone(
     device_id: Optional[int] = None,
     normalize: bool = True,
 ) -> AudioInput:
-    """Records audio from the microphone for a fixed duration.
+    """Records audio from the microphone for up to `duration` seconds.
 
-    Args:
-        duration: Duration to record in seconds.
-        sample_rate: Recording sample rate (default 16000).
-        device_id: Audio input device ID (default None selects system default).
-        normalize: Whether to peak-normalize the recorded audio.
-
-    Returns:
-        AudioInput object.
+    Supports early completion via Ctrl+C.
     """
     if duration <= 0:
         raise ValueError(f"Duration must be greater than 0, got {duration}")
 
-    logger.info("Starting microphone recording (up to %.1f seconds, press Ctrl+C to finish)...", duration)
+    # Resolve and validate device
+    dev_info = get_device_info(device_id)
+    target_device = int(dev_info["id"])
+    if int(dev_info["channels"]) <= 0:
+        raise ValueError(
+            f"Device [{target_device}] '{dev_info['name']}' has 0 input channels (output-only device)."
+        )
+
+    logger.info(
+        "Using input device [%d]: '%s' (channels=%d, default_sr=%.0f Hz)",
+        target_device, dev_info["name"], dev_info["channels"], dev_info["default_sr"]
+    )
+    logger.info("Recording (up to %.1f seconds, press Ctrl+C to finish)...", duration)
+
     chunks: List[np.ndarray] = []
 
     def audio_callback(indata: np.ndarray, frames: int, time_info: dict, status: sd.CallbackFlags) -> None:
@@ -221,7 +289,7 @@ def record_microphone(
             samplerate=sample_rate,
             channels=1,
             dtype="float32",
-            device=device_id,
+            device=target_device,
             callback=audio_callback,
         ):
             while time.time() - start_time < duration:
@@ -234,7 +302,7 @@ def record_microphone(
             raise PermissionError(
                 "Microphone access denied or audio device unavailable. "
                 "On macOS, verify microphone permissions in: "
-                "System Settings -> Privacy & Security -> Microphone -> Terminal / Python."
+                "System Settings -> Privacy & Security -> Microphone."
             ) from e
         raise RuntimeError(f"Audio recording failed: {error_msg}") from e
 
@@ -250,4 +318,18 @@ def record_microphone(
         samples=samples,
         sample_rate=sample_rate,
         duration=float(len(samples)) / float(sample_rate) if len(samples) > 0 else 0.0,
+    )
+
+
+def record_raw_audio(
+    duration: float = 5.0,
+    sample_rate: int = STANDARD_SAMPLE_RATE,
+    device_id: Optional[int] = None,
+) -> AudioInput:
+    """Records raw audio without peak normalization for diagnostic level verification."""
+    return record_microphone(
+        duration=duration,
+        sample_rate=sample_rate,
+        device_id=device_id,
+        normalize=False,
     )
