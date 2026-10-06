@@ -12,6 +12,8 @@ export default function TeacherDashboard() {
   const [session, setSession] = useState(null);
   const [duration, setDuration] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [demoTime, setDemoTime] = useState(0);
   
   const pollInterval = useRef(null);
 
@@ -21,7 +23,17 @@ export default function TeacherDashboard() {
     return () => clearInterval(pollInterval.current);
   }, []);
 
-  const fetchDevices = async () => {
+  const fetchDevices = async (demo = isDemoMode) => {
+    if (demo) {
+      setDevices({
+        cameras: [{ id: 0, name: 'Demo Camera HD' }],
+        screens: [{ id: 1, name: 'Demo Display (1920x1080)' }]
+      });
+      setSelectedCam(0);
+      setSelectedScreen(1);
+      setBackendOffline(false);
+      return;
+    }
     try {
       const data = await api.fetchDevices();
       setDevices(data);
@@ -30,10 +42,12 @@ export default function TeacherDashboard() {
       setBackendOffline(false);
     } catch (e) {
       setBackendOffline(true);
+      setErrorMessage(e.message || 'Failed to fetch devices');
     }
   };
 
   const checkStatus = async () => {
+    if (isDemoMode) return;
     try {
       const data = await api.getSessionStatus();
       setBackendOffline(false);
@@ -49,6 +63,7 @@ export default function TeacherDashboard() {
       }
     } catch (e) {
       setBackendOffline(true);
+      setErrorMessage(e.message || 'Failed to check status');
     }
   };
 
@@ -70,15 +85,36 @@ export default function TeacherDashboard() {
   };
 
   const handleStart = async () => {
+    if (isDemoMode) {
+      setStatus('recording');
+      setSession({ session_id: 'demo_session_2026', events: [] });
+      setDuration(0);
+      setDemoTime(0);
+      if (pollInterval.current) clearInterval(pollInterval.current);
+      pollInterval.current = setInterval(() => {
+        setDemoTime(t => {
+          const newTime = t + 1;
+          setDuration(newTime);
+          if (newTime % 5 === 0) { // Add a fake event every 5 seconds
+            setSession(prev => ({
+              ...prev,
+              events: [...(prev.events || []), { timestamp: newTime, source: 'screen', type: 'keyframe', change_score: Math.random() }]
+            }));
+          }
+          return newTime;
+        });
+      }, 1000);
+      return;
+    }
     try {
       const data = await api.startSession(selectedCam, selectedScreen);
       setStatus('recording');
-      setSession({ session_id: data.session_id, events_count: 0 });
+      setSession({ session_id: data.session_id, events: [] });
       setDuration(0);
       startPolling();
     } catch (e) {
       setStatus('error');
-      setErrorMessage(e.message || 'Failed to start recording');
+      setErrorMessage(e.message || 'Failed to start recording. Please check camera/microphone permissions and ensure backend is running.');
     }
   };
 
@@ -98,6 +134,11 @@ export default function TeacherDashboard() {
 
   const handleStop = async () => {
     if (confirm("Stop this lecture?\n\nThe current recording will be finalized and stored locally on this device.")) {
+      if (isDemoMode) {
+        setStatus('stopped');
+        clearInterval(pollInterval.current);
+        return;
+      }
       try {
         const data = await api.stopSession();
         setStatus('stopped');
@@ -117,13 +158,18 @@ export default function TeacherDashboard() {
     return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  if (backendOffline) {
+  if (backendOffline && !isDemoMode) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', padding: '2rem' }}>
         <AlertCircle size={48} color="var(--danger)" style={{ marginBottom: '1rem' }} />
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 500, marginBottom: '0.5rem' }}>GyanDrishti Local Engine isn't running.</h2>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Start the local Python backend to begin capturing lectures.</p>
-        <button className="capture-btn-secondary" onClick={fetchDevices}>Retry Connection</button>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 500, marginBottom: '0.5rem' }}>Unable to connect to the GyanDrishti Local Engine.</h2>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', textAlign: 'center', maxWidth: '500px' }}>
+          GyanDrishti is designed to be fully local. It seems the background engine is not currently running. Please start the local Python backend to begin capturing lectures.
+        </p>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button className="capture-btn-secondary" onClick={() => fetchDevices(false)}>Retry Connection</button>
+          <button className="capture-btn-primary" onClick={() => { setIsDemoMode(true); fetchDevices(true); }}>Enter Demo Mode</button>
+        </div>
       </div>
     );
   }
@@ -141,6 +187,16 @@ export default function TeacherDashboard() {
               <ShieldCheck size={14} color="var(--success)" />
               <span>Local & Private</span>
             </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', color: isDemoMode ? 'var(--accent)' : 'var(--text-muted)' }}>
+               <input type="checkbox" checked={isDemoMode} onChange={e => {
+                 setIsDemoMode(e.target.checked);
+                 if (e.target.checked) fetchDevices(true);
+                 else { setStatus('idle'); fetchDevices(false); }
+               }} style={{ cursor: 'pointer' }} />
+               Demo Mode
+             </label>
           </div>
         </header>
 
