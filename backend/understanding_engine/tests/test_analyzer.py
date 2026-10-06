@@ -6,7 +6,7 @@ from understanding_engine.llm import MockLLMProvider
 
 
 def test_analyzer_banglish_transcript_semantic_understanding() -> None:
-    banglish_text = "Ekhane amra basically dekhchi je current ta increase korche because resistance komche."
+    banglish_text = "Ekhane amra basically dekhchi je current ta increase korche because resistance komche, so I is equal to V divided by R."
 
     # Mock response illustrating semantic understanding of Banglish speech
     def mock_banglish_response(prompt: str) -> str:

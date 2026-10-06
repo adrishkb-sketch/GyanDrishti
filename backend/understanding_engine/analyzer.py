@@ -22,6 +22,7 @@ from .schemas import (
     LectureUnderstanding,
     VisualReference,
 )
+from .grounding import DeterministicGroundingValidator
 from .validators import (
     UnderstandingValidationError,
     extract_json_from_llm_text,
@@ -111,13 +112,18 @@ class LectureUnderstandingEngine:
                 temperature=0.1,
             )
             raw_dict = extract_json_from_llm_text(raw_response)
-            return validate_and_build_understanding(
+            proposal = validate_and_build_understanding(
                 raw_dict=raw_dict,
                 fallback_start=start_time,
                 fallback_end=end_time,
                 lecture_id=lecture_id,
                 raw_transcript_ref=raw_text_ref,
                 model_name=self.provider.get_model_name(),
+            )
+            # Apply deterministic evidence grounding
+            return DeterministicGroundingValidator.validate_understanding(
+                understanding=proposal,
+                raw_transcript=raw_text_ref,
             )
 
         except (LLMUnavailableError, LLMTimeoutError) as e:

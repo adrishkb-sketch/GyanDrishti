@@ -304,10 +304,12 @@ def main() -> None:
             print(f"    Topic: \"{u.topic}\"")
             print(f"    Concepts: {[c.name for c in u.concepts]}")
             print(f"    Definitions: {[d.term + ': ' + d.definition for d in u.definitions]}")
-            print(f"    Equations: {[eq.latex_or_text for eq in u.equations]}")
+            print(f"    Trusted Equations: {[eq.latex_or_text for eq in u.equations]}")
+            print(f"    Rejected Hallucinated Equations: {[eq.latex_or_text for eq in u.rejected_equations]}")
             print(f"    Key Points: {[p.point for p in u.important_points]}")
             print(f"    Visual References: {[v.relevance for v in u.visual_references]}")
-            print(f"    Confidence: {u.confidence}")
+            print(f"    LLM Self-Confidence: {u.confidence}")
+            print(f"    Deterministic Grounding Score: {u.grounding_score}")
 
 
 if __name__ == "__main__":

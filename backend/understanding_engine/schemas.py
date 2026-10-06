@@ -50,6 +50,14 @@ class Equation(BaseModel):
         default=True,
         description="Whether the equation was explicitly dictated by the speaker (avoids hallucination)",
     )
+    grounding_status: str = Field(
+        default="supported",
+        description="Deterministic grounding status: 'supported', 'unsupported', 'uncertain'",
+    )
+    evidence_snippet: Optional[str] = Field(
+        default=None,
+        description="Source transcript snippet or token trace supporting this equation",
+    )
 
     @field_validator("timestamp", mode="after")
     @classmethod
@@ -113,6 +121,10 @@ class LectureUnderstanding(BaseModel):
     concepts: List[Concept] = Field(default_factory=list, description="Extracted core concepts")
     definitions: List[Definition] = Field(default_factory=list, description="Extracted definitions")
     equations: List[Equation] = Field(default_factory=list, description="Explicitly supported equations")
+    rejected_equations: List[Equation] = Field(
+        default_factory=list,
+        description="Equations proposed by LLM but rejected by deterministic grounding validator",
+    )
     important_points: List[ImportantPoint] = Field(default_factory=list, description="High-salience key points")
     visual_references: List[VisualReference] = Field(
         default_factory=list,
@@ -123,6 +135,10 @@ class LectureUnderstanding(BaseModel):
         description="Candidate revision/quiz questions",
     )
     confidence: float = Field(default=1.0, description="Overall extraction confidence score between 0.0 and 1.0")
+    grounding_score: float = Field(
+        default=1.0,
+        description="Deterministic evidence grounding score computed from source verification",
+    )
     raw_transcript_ref: Optional[str] = Field(
         default=None,
         description="Immutable reference copy of the raw source transcript text",
