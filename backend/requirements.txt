@@ -1,0 +1,18 @@
+# GyanDrishti Offline Multilingual Speech Engine
+# Milestone 1 Dependencies
+
+# Offline Multilingual ASR (CTranslate2-backed Whisper with Apple Silicon / ARM NEON acceleration)
+faster-whisper>=1.1.0
+
+# Cross-platform Audio Input & Device Capture
+sounddevice>=0.5.0
+soundfile>=0.13.0
+
+# Data Validation, Serialization & Schemas
+pydantic>=2.7.0
+
+# Numerical Computing
+numpy>=1.26.0
+
+# Testing & Verification
+pytest>=8.0.0

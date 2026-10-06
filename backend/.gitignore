@@ -1,0 +1,36 @@
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Model weights (do NOT commit weights)
+models/*
+!models/.gitkeep
+
+# Local classroom recordings (strictly local & private)
+recordings/*
+!recordings/.gitkeep
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.ogg
+
+# Transcripts and benchmark results generated locally
+outputs/
+*.json
+!benchmarks/*.json.example
+
+# Environment and secrets
+.env
+.env.*
+*.log
