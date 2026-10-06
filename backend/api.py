@@ -16,6 +16,14 @@ from video_engine.frames.change_detector import ChangeDetector
 from video_engine.frames.keyframes import KeyframeExtractor
 from video_engine.storage.manifest import ManifestGenerator
 from video_engine.schemas import Manifest
+from lecture_memory.storage import (
+    LectureMemoryStorage,
+    MemoryNotFoundError,
+    CorruptMemoryError,
+    InvalidSessionIdError,
+)
+from retrieval.retriever import SemanticLectureRetriever
+from retrieval.schemas import RetrievalFilter
 
 app = FastAPI(title="GyanDrishti API")
 
@@ -191,6 +199,62 @@ def stop_session():
 @app.get("/api/video/session/status")
 def session_status():
     return manager.get_status()
+
+# Lecture Memory Endpoints
+memory_storage = LectureMemoryStorage()
+
+@app.get("/api/lectures")
+def list_lectures():
+    """Returns index of all locally persisted lecture memories."""
+    return {"lectures": memory_storage.list_lectures()}
+
+@app.get("/api/lectures/{session_id}")
+def get_lecture_memory(session_id: str):
+    """Retrieves full canonical lecture memory formatted for frontend viewer."""
+    try:
+        memory = memory_storage.load(session_id)
+        return memory.to_frontend_dict()
+    except MemoryNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Lecture memory '{session_id}' not found")
+    except InvalidSessionIdError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except CorruptMemoryError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Semantic Memory Retrieval Endpoint
+retriever = SemanticLectureRetriever()
+
+@app.get("/api/search")
+def search_lectures(q: str, top_k: int = 5, session_id: Optional[str] = None):
+    """Searches across indexed lecture memories with cosine semantic similarity."""
+    for meta in memory_storage.list_lectures():
+        s_id = meta.get("session_id")
+        if s_id and s_id not in retriever.index.session_index_map:
+            try:
+                mem = memory_storage.load(s_id)
+                retriever.index_lecture(mem)
+            except Exception:
+                pass
+
+    filter_crit = RetrievalFilter(session_id=session_id) if session_id else None
+    results = retriever.search(q, top_k=top_k, filter_criteria=filter_crit)
+    return {
+        "query": q,
+        "results": [
+            {
+                "score": r.score,
+                "lecture_id": r.chunk.lecture_id,
+                "session_id": r.chunk.session_id,
+                "chunk_type": r.chunk.chunk_type.value,
+                "timestamp_start": r.chunk.timestamp_start,
+                "timestamp_end": r.chunk.timestamp_end,
+                "source_type": r.chunk.source_type,
+                "grounding_status": r.chunk.grounding_status,
+                "text": r.chunk.text,
+            }
+            for r in results
+        ],
+    }
 
 if __name__ == "__main__":
     import uvicorn
