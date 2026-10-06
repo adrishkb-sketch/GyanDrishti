@@ -43,7 +43,7 @@ const Landing = () => {
             <BrainCircuit color="var(--primary-color)" size={32} />
           </motion.div>
           <h1 style={{ fontSize: '24px', fontWeight: 800, letterSpacing: '-0.5px', color: 'white' }}>
-            Lecture<span className="gradient-text">AI</span>
+            Gyan<span className="gradient-text">Drishti</span>
           </h1>
         </div>
         <div style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
@@ -113,23 +113,24 @@ const Landing = () => {
               <motion.div animate={{ rotate: [0, 15, -15, 0] }} transition={{ repeat: Infinity, duration: 2 }}>
                 <Sparkles size={14} style={{ marginRight: '6px' }}/>
               </motion.div>
-              Revolutionizing Higher Education
+              100% Local Classroom Intelligence
             </span>
           </motion.div>
           
           <motion.h1 variants={textReveal} style={{ fontSize: '72px', fontWeight: 800, lineHeight: 1.1, marginBottom: '24px', transformStyle: 'preserve-3d' }}>
-            Transform Lectures into <br />
+            Capture less. <br />
+            Understand more. <br />
             <motion.span 
               className="gradient-text"
               initial={{ backgroundPosition: '0% 50%' }}
               animate={{ backgroundPosition: '100% 50%' }}
               transition={{ duration: 5, repeat: Infinity, repeatType: 'reverse' }}
               style={{ backgroundSize: '200% 200%' }}
-            >Interactive Intelligence</motion.span>
+            >Remember everything.</motion.span>
           </motion.h1>
           
           <motion.p variants={fadeInUp} style={{ fontSize: '20px', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '40px' }}>
-            Seamlessly record classes, instantly generate AI study notes, and let students interact with the material. Drive engagement with smart analytics and automated polls.
+            An offline-first classroom intelligence interface. GyanDrishti fuses speech and visual evidence to build a deeply understandable, searchable Lecture Memory—all running privately on your device.
           </motion.p>
           
           <motion.div variants={fadeInUp} style={{ display: 'flex', gap: '16px' }}>
@@ -182,22 +183,22 @@ const Landing = () => {
                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <motion.div animate={{ rotate: 360 }} transition={{ duration: 8, repeat: Infinity, ease: 'linear' }} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(45deg, #6366f1, #ec4899)' }}></motion.div>
                   <div>
-                    <h4 style={{ margin: 0, fontSize: '16px', color: 'white' }}>Dr. Smith's AI Class</h4>
-                    <motion.span animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 2, repeat: Infinity }} style={{ fontSize: '12px', color: 'var(--primary-color)' }}>Generating AI notes...</motion.span>
+                    <h4 style={{ margin: 0, fontSize: '16px', color: 'white' }}>Basic Electrical Engineering</h4>
+                    <motion.span animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 2, repeat: Infinity }} style={{ fontSize: '12px', color: 'var(--primary-color)' }}>Building Lecture Memory...</motion.span>
                   </div>
                </div>
             </div>
             
             <div style={{ flex: 1, background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', overflow: 'hidden', transform: 'translateZ(40px)' }}>
                 <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 1 }} style={{ background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px', width: '85%' }}>
-                  <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>AI Summary:</p>
-                  <p style={{ margin: '4px 0 0', fontSize: '14px', color: 'white' }}>Machine learning models require robust datasets for training.</p>
+                  <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Evidence Fusion:</p>
+                  <p style={{ margin: '4px 0 0', fontSize: '14px', color: 'white' }}>Speech and visual evidence agree on Ohm's Law (I=V/R).</p>
                 </motion.div>
                 <motion.div initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 2 }} style={{ background: 'rgba(99,102,241,0.2)', padding: '12px', borderRadius: '8px', width: '75%', alignSelf: 'flex-end', borderBottomRightRadius: '0', border: '1px solid rgba(99,102,241,0.3)' }}>
-                  <p style={{ margin: 0, fontSize: '14px', color: 'white' }}>What is an example of a robust dataset?</p>
+                  <p style={{ margin: 0, fontSize: '14px', color: 'white' }}>What happens if resistance doubles?</p>
                 </motion.div>
                 <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 3 }} style={{ background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px', width: '85%', borderBottomLeftRadius: '0' }}>
-                  <p style={{ margin: 0, fontSize: '14px', color: 'white' }}>ImageNet is a classic example of a robust dataset used in computer vision...</p>
+                  <p style={{ margin: 0, fontSize: '14px', color: 'white' }}>According to the lecture memory, current will be halved.</p>
                 </motion.div>
             </div>
             
@@ -315,9 +316,9 @@ const Landing = () => {
           <div style={{ position: 'absolute', top: '40px', left: '15%', right: '15%', height: '2px', background: 'linear-gradient(90deg, var(--primary-color), var(--secondary-color))', zIndex: 0, opacity: 0.3 }}></div>
 
           {[
-            { num: 1, title: 'Record Lecture', desc: 'The professor simply clicks record. Our system captures audio, video, and screen sharing.' },
-            { num: 2, title: 'AI Processing', desc: 'Our advanced AI transcribes the lecture, extracts key concepts, and creates summary notes instantly.' },
-            { num: 3, title: 'Interactive Learning', desc: 'Students interact with the AI to ask questions, while teachers view analytics on what students find confusing.' }
+            { num: 1, title: 'Local Capture', desc: 'Capture the classroom privately. Everything runs locally, ensuring no data leaves your device.' },
+            { num: 2, title: 'Multimodal Fusion', desc: 'Our engine fuses speech and visual evidence to deeply understand the context of the lecture in real-time.' },
+            { num: 3, title: 'Lecture Memory', desc: 'Generate an intelligent, searchable memory of every concept and equation with explicit evidence tracking.' }
           ].map((step, i) => (
             <motion.div 
               key={i}
@@ -344,10 +345,10 @@ const Landing = () => {
       <footer style={{ padding: '64px 10%', background: 'rgba(0,0,0,0.8)', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <BrainCircuit color="var(--primary-color)" size={24} />
-          <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'white' }}>Lecture<span className="gradient-text">AI</span></h2>
+          <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'white' }}>Gyan<span className="gradient-text">Drishti</span></h2>
         </div>
         <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-          © 2026 LectureAI Inc. All rights reserved.
+          © 2026 GyanDrishti. All rights reserved.
         </div>
         <div style={{ display: 'flex', gap: '24px' }}>
           <motion.a whileHover={{ color: 'var(--primary-color)' }} href="#" style={{ color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.2s' }}>Privacy Policy</motion.a>
