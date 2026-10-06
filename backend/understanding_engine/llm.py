@@ -68,23 +68,42 @@ class OllamaProvider(BaseLLMProvider):
 
     def __init__(
         self,
-        model: str = "llama3.2",
+        model: str = "llama3.2:3b",
         base_url: str = "http://localhost:11434",
-        timeout: float = 60.0,
+        timeout: float = 120.0,
     ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
+    def _resolve_model(self) -> str:
+        """Resolves model tag against available local models in Ollama."""
+        try:
+            with httpx.Client(timeout=2.0) as client:
+                res = client.get(f"{self.base_url}/api/tags")
+                if res.status_code == 200:
+                    models = [m.get("name", "") for m in res.json().get("models", [])]
+                    if self.model in models:
+                        return self.model
+                    for m in models:
+                        if m.startswith(self.model) or self.model.startswith(m.split(":")[0]):
+                            return m
+        except Exception:
+            pass
+        return self.model
+
     def get_model_name(self) -> str:
         return f"ollama/{self.model}"
 
     def is_available(self) -> bool:
-        """Checks if Ollama daemon is running locally."""
+        """Checks if Ollama daemon is running locally and has models available."""
         try:
             with httpx.Client(timeout=2.0) as client:
                 res = client.get(f"{self.base_url}/api/tags")
-                return res.status_code == 200
+                if res.status_code == 200:
+                    models = res.json().get("models", [])
+                    return len(models) > 0
+                return False
         except Exception:
             return False
 
@@ -95,9 +114,10 @@ class OllamaProvider(BaseLLMProvider):
         temperature: float = 0.1,
         **kwargs: Any,
     ) -> str:
+        active_model = self._resolve_model()
         url = f"{self.base_url}/api/generate"
         payload = {
-            "model": self.model,
+            "model": active_model,
             "prompt": prompt,
             "system": system_prompt or "",
             "stream": False,
