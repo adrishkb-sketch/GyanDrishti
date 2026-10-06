@@ -52,7 +52,7 @@ const Landing = () => {
           <div style={{ display: 'flex', gap: '16px' }}>
             <Link to="/login" className="btn-secondary" style={{ padding: '10px 20px' }}>Sign In</Link>
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Link to="/login" className="btn-primary" style={{ padding: '10px 20px' }}>Get Started</Link>
+              <Link to="/dashboard/teacher" className="btn-primary" style={{ padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '6px' }}><Video size={16} /> Record Lecture</Link>
             </motion.div>
           </div>
         </div>
@@ -134,8 +134,8 @@ const Landing = () => {
           
           <motion.div variants={fadeInUp} style={{ display: 'flex', gap: '16px' }}>
             <motion.div whileHover={{ scale: 1.05, boxShadow: "0 0 30px rgba(99,102,241,0.6)" }} whileTap={{ scale: 0.95 }}>
-              <Link to="/login" className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '18px', padding: '16px 32px' }}>
-                Start for Free <Play size={20} />
+              <Link to="/dashboard/teacher" className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '18px', padding: '16px 32px' }}>
+                Record Lecture <Video size={20} />
               </Link>
             </motion.div>
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
