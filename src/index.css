@@ -186,3 +186,79 @@ body {
   outline: none;
   border-color: var(--primary-color);
 }
+/* Custom Capture UI styles appended */
+.capture-btn-primary {
+  background: white;
+  color: #0a0a0c;
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+}
+.capture-btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+.capture-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.capture-btn-secondary {
+  background: rgba(255, 255, 255, 0.03);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.capture-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.capture-btn-danger {
+  background: rgba(248, 113, 113, 0.1);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.capture-btn-danger:hover { background: rgba(248, 113, 113, 0.2); }
+
+.capture-select {
+  font-family: inherit;
+  background: rgba(255, 255, 255, 0.03);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+}
+.capture-select:hover { border-color: rgba(255, 255, 255, 0.2); }
+
+.capture-status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+.capture-status-dot.active { background: #34d399; }
+.capture-status-dot.inactive { background: #94a3b8; }
+.capture-status-dot.error { background: #f87171; }
+.capture-status-dot.pulse { animation: capturePulse 2s infinite; }
+
+@keyframes capturePulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(248, 113, 113, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0); }
+}
+
+.capture-dashboard {
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --text-muted: rgba(255, 255, 255, 0.4);
+  --border-color: rgba(255, 255, 255, 0.1);
+  --accent: #5e6ad2;
+  --success: #34d399;
+  --danger: #f87171;
+  color: var(--text-primary);
+}

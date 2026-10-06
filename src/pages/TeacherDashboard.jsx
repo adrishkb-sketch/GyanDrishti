@@ -1,225 +1,327 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { Users, BarChart2, CheckSquare, PlusCircle, Mic, LogOut, Video, Settings, LayoutDashboard, FileText, Bell, Search, Star, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Video, Monitor, Mic, ShieldAlert, ShieldCheck, Activity, Play, Square, Pause, HardDrive, AlertCircle, ChevronDown, CheckCircle2 } from 'lucide-react';
+import * as api from '../api/video';
 
-const TeacherDashboard = () => {
-  return (
-    <div className="dashboard-layout fade-in">
-      {/* Sidebar */}
-      <div className="sidebar">
-        <Link to="/" style={{ textDecoration: 'none', color: 'white', marginBottom: '24px' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 800 }}>
-            Lecture<span className="gradient-text">AI</span>
-          </h2>
-        </Link>
+export default function TeacherDashboard() {
+  const [status, setStatus] = useState('idle'); // idle, recording, paused, stopped, error
+  const [devices, setDevices] = useState({ cameras: [], screens: [] });
+  const [selectedCam, setSelectedCam] = useState(0);
+  const [selectedScreen, setSelectedScreen] = useState(1);
+  const [backendOffline, setBackendOffline] = useState(false);
+  const [session, setSession] = useState(null);
+  const [duration, setDuration] = useState(0);
+  const [errorMessage, setErrorMessage] = useState('');
+  
+  const pollInterval = useRef(null);
 
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-          <Link to="#" className="nav-item active">
-            <LayoutDashboard size={20} /> Dashboard
-          </Link>
-          <Link to="#" className="nav-item">
-            <Video size={20} /> My Classes
-          </Link>
-          <Link to="#" className="nav-item">
-            <BarChart2 size={20} /> Analytics
-          </Link>
-          <Link to="#" className="nav-item">
-            <Users size={20} /> Students
-          </Link>
-          <Link to="#" className="nav-item">
-            <FileText size={20} /> Assignments
-          </Link>
-          <Link to="#" className="nav-item">
-            <Settings size={20} /> Settings
-          </Link>
-        </nav>
+  useEffect(() => {
+    fetchDevices();
+    checkStatus();
+    return () => clearInterval(pollInterval.current);
+  }, []);
 
-        <Link to="/login" className="nav-item" style={{ color: 'var(--secondary-color)' }}>
-          <LogOut size={20} /> Logout
-        </Link>
+  const fetchDevices = async () => {
+    try {
+      const data = await api.fetchDevices();
+      setDevices(data);
+      if (data.cameras.length > 0) setSelectedCam(data.cameras[0].id);
+      if (data.screens.length > 0) setSelectedScreen(data.screens[0].id);
+      setBackendOffline(false);
+    } catch (e) {
+      setBackendOffline(true);
+    }
+  };
+
+  const checkStatus = async () => {
+    try {
+      const data = await api.getSessionStatus();
+      setBackendOffline(false);
+      if (data.is_recording) {
+        setStatus(data.is_paused ? 'paused' : 'recording');
+        setSession(data);
+        setDuration(data.duration);
+        startPolling();
+      } else if (data.session_id && status === 'recording') {
+        setStatus('stopped');
+        setSession(data);
+        clearInterval(pollInterval.current);
+      }
+    } catch (e) {
+      setBackendOffline(true);
+    }
+  };
+
+  const startPolling = () => {
+    if (pollInterval.current) clearInterval(pollInterval.current);
+    pollInterval.current = setInterval(async () => {
+      try {
+        const data = await api.getSessionStatus();
+        if (data.is_recording) {
+          setSession(data);
+          setDuration(data.duration);
+        } else {
+          clearInterval(pollInterval.current);
+        }
+      } catch (e) {
+        console.error("Polling error", e);
+      }
+    }, 1000);
+  };
+
+  const handleStart = async () => {
+    try {
+      const data = await api.startSession(selectedCam, selectedScreen);
+      setStatus('recording');
+      setSession({ session_id: data.session_id, events_count: 0 });
+      setDuration(0);
+      startPolling();
+    } catch (e) {
+      setStatus('error');
+      setErrorMessage(e.message || 'Failed to start recording');
+    }
+  };
+
+  const handlePauseResume = async () => {
+    try {
+      if (status === 'recording') {
+        await api.pauseSession();
+        setStatus('paused');
+      } else {
+        await api.resumeSession();
+        setStatus('recording');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleStop = async () => {
+    if (confirm("Stop this lecture?\n\nThe current recording will be finalized and stored locally on this device.")) {
+      try {
+        const data = await api.stopSession();
+        setStatus('stopped');
+        setSession(data);
+        setDuration(data.duration);
+        clearInterval(pollInterval.current);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  if (backendOffline) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', padding: '2rem' }}>
+        <AlertCircle size={48} color="var(--danger)" style={{ marginBottom: '1rem' }} />
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 500, marginBottom: '0.5rem' }}>GyanDrishti Local Engine isn't running.</h2>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Start the local Python backend to begin capturing lectures.</p>
+        <button className="capture-btn-secondary" onClick={fetchDevices}>Retry Connection</button>
       </div>
+    );
+  }
 
-      {/* Main Content */}
-      <div className="main-content">
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+  return (
+    <div className="capture-dashboard" style={{ display: 'flex', minHeight: '100vh', padding: '2rem', gap: '2rem', maxWidth: '1440px', margin: '0 auto' }}>
+      
+      {/* Left Column: Controls & State */}
+      <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h2 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '4px' }}>Professor Dashboard</h2>
-            <p style={{ color: 'var(--text-muted)' }}>Manage your classes, view AI insights, and track student performance.</p>
-          </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <div style={{ position: 'relative', width: '250px' }}>
-              <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input type="text" className="form-control" placeholder="Search..." style={{ paddingLeft: '40px', borderRadius: '20px', padding: '8px 16px 8px 40px' }} />
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 600, letterSpacing: '-0.02em' }}>GYAN DRISHTI</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>
+              <ShieldCheck size={14} color="var(--success)" />
+              <span>Local & Private</span>
             </div>
-            <Bell size={24} color="var(--text-light)" style={{ cursor: 'pointer' }} />
-            <button className="btn-primary animate-pulse-glow" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Mic size={18} /> Record Lecture
-            </button>
           </div>
         </header>
 
-        {/* Stats Row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '32px' }}>
-          <div className="card" style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>Total Students</p>
-              <Users size={18} color="var(--primary-color)" />
-            </div>
-            <h3 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '4px' }}>342</h3>
-            <p style={{ fontSize: '12px', color: 'var(--success)' }}>+12 this semester</p>
-          </div>
-          <div className="card" style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>Avg. Attendance</p>
-              <CheckSquare size={18} color="var(--success)" />
-            </div>
-            <h3 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '4px' }}>94%</h3>
-            <p style={{ fontSize: '12px', color: 'var(--success)' }}>+2% from last week</p>
-          </div>
-          <div className="card" style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>Avg. AI Understanding</p>
-              <Star size={18} color="var(--warning)" />
-            </div>
-            <h3 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '4px' }}>8.2/10</h3>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Based on AI Q&A metrics</p>
-          </div>
-          <div className="card" style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>Unanswered Questions</p>
-              <AlertCircle size={18} color="var(--secondary-color)" />
-            </div>
-            <h3 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '4px' }}>14</h3>
-            <p style={{ fontSize: '12px', color: 'var(--secondary-color)' }}>Needs your review</p>
-          </div>
-        </div>
-
-        {/* Content Row */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {/* AI Insights Panel */}
-            <div className="card" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.05), rgba(236,72,153,0.05))', border: '1px solid rgba(99,102,241,0.2)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h3 style={{ fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <BarChart2 size={20} color="var(--primary-color)" /> AI Lecture Insights
-                </h3>
+        <AnimatePresence mode="wait">
+          {status === 'idle' && (
+            <motion.div 
+              key="setup"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="glass-panel" 
+              style={{ padding: '3rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}
+            >
+              <div>
+                <h2 style={{ fontSize: '2.5rem', fontWeight: 600, marginBottom: '0.5rem', letterSpacing: '-0.03em' }}>Lecture Capture</h2>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>Capture the lecture. Let GyanDrishti remember the important parts.</p>
               </div>
-              <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                Based on your last lecture "Introduction to Neural Networks", here is what the AI analyzed from student questions:
-              </p>
-              <div style={{ display: 'flex', gap: '16px' }}>
-                <div style={{ flex: 1, background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '8px' }}>
-                  <h4 style={{ fontSize: '14px', marginBottom: '8px', color: 'var(--warning)' }}>Most Confusing Topic</h4>
-                  <p style={{ fontSize: '13px' }}>Gradient Descent & Learning Rates (45 students asked about this).</p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <Video size={20} color="var(--text-muted)" />
+                    <span style={{ fontWeight: 500 }}>Camera</span>
+                  </div>
+                  <select className="capture-select" value={selectedCam} onChange={e => setSelectedCam(Number(e.target.value))}>
+                    {devices.cameras.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {devices.cameras.length === 0 && <option disabled>No cameras found</option>}
+                  </select>
                 </div>
-                <div style={{ flex: 1, background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '8px' }}>
-                  <h4 style={{ fontSize: '14px', marginBottom: '8px', color: 'var(--success)' }}>Most Understood</h4>
-                  <p style={{ fontSize: '13px' }}>Activation Functions (High confidence in quiz responses).</p>
+                
+                <div style={{ height: '1px', background: 'var(--border-color)' }} />
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <Monitor size={20} color="var(--text-muted)" />
+                    <span style={{ fontWeight: 500 }}>Screen</span>
+                  </div>
+                  <select className="capture-select" value={selectedScreen} onChange={e => setSelectedScreen(Number(e.target.value))}>
+                    {devices.screens.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {devices.screens.length === 0 && <option disabled>No screens found</option>}
+                  </select>
                 </div>
               </div>
-            </div>
 
-            {/* Class List */}
-            <div className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <h3 style={{ fontSize: '18px' }}>Recent Recordings</h3>
-                <Link to="#" style={{ color: 'var(--primary-color)', fontSize: '14px', textDecoration: 'none' }}>View Archive</Link>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '1rem' }}>
+                <button className="capture-btn-primary" style={{ padding: '1rem 2rem', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={handleStart} disabled={devices.cameras.length === 0}>
+                  <Play size={20} fill="currentColor" />
+                  Start Lecture
+                </button>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <HardDrive size={14} />
+                  Stored locally on this device
+                </div>
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                <thead>
-                  <tr style={{ color: 'var(--text-muted)', textAlign: 'left', borderBottom: '1px solid var(--glass-border)' }}>
-                    <th style={{ paddingBottom: '12px', fontWeight: 500 }}>Lecture Name</th>
-                    <th style={{ paddingBottom: '12px', fontWeight: 500 }}>Date</th>
-                    <th style={{ paddingBottom: '12px', fontWeight: 500 }}>Views</th>
-                    <th style={{ paddingBottom: '12px', fontWeight: 500 }}>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { title: 'Lecture 12: Neural Networks', date: 'Today', views: 85, status: 'AI Processing' },
-                    { title: 'Lecture 11: Support Vector Machines', date: 'Oct 1', views: 320, status: 'Ready' },
-                    { title: 'Lecture 10: Decision Trees', date: 'Sep 28', views: 341, status: 'Ready' },
-                  ].map((row, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <td style={{ padding: '16px 0', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: 'var(--glass-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Video size={16} color="var(--primary-color)" />
-                        </div>
-                        {row.title}
-                      </td>
-                      <td style={{ padding: '16px 0', color: 'var(--text-muted)' }}>{row.date}</td>
-                      <td style={{ padding: '16px 0' }}>{row.views}</td>
-                      <td style={{ padding: '16px 0' }}>
-                        <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '12px', background: row.status === 'Ready' ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)', color: row.status === 'Ready' ? 'var(--success)' : 'var(--warning)' }}>
-                          {row.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            </motion.div>
+          )}
+
+          {(status === 'recording' || status === 'paused') && (
+            <motion.div 
+              key="recording"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="glass-panel"
+              style={{ padding: '3rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3rem', minHeight: '500px' }}
+            >
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(248, 113, 113, 0.1)', color: 'var(--danger)', padding: '0.5rem 1rem', borderRadius: '20px', fontWeight: 600, fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                  <span className={`status-dot ${status === 'recording' ? 'error pulse' : 'inactive'}`} />
+                  {status === 'recording' ? 'RECORDING' : 'PAUSED'}
+                </div>
+                <div style={{ fontSize: '4.5rem', fontWeight: 300, fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
+                  {formatTime(duration)}
+                </div>
+                <div style={{ color: 'var(--text-muted)', marginTop: '1rem', fontFamily: 'var(--font-mono)' }}>
+                  Session: {session?.session_id}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button className="capture-btn-secondary" style={{ width: '120px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }} onClick={handlePauseResume}>
+                  {status === 'recording' ? <><Pause size={18} /> Pause</> : <><Play size={18} /> Resume</>}
+                </button>
+                <button className="capture-btn-danger" style={{ width: '120px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }} onClick={handleStop}>
+                  <Square size={18} fill="currentColor" /> Stop
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {status === 'stopped' && (
+            <motion.div 
+              key="stopped"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass-panel" 
+              style={{ padding: '3rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--success)' }}>
+                <CheckCircle2 size={32} />
+                <h2 style={{ fontSize: '2rem', fontWeight: 600, color: 'var(--text-primary)' }}>Lecture captured</h2>
+              </div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>Your lecture has been safely stored on this device.</p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '12px' }}>
+                <div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '4px' }}>Duration</div>
+                  <div style={{ fontSize: '1.2rem', fontFamily: 'var(--font-mono)' }}>{formatTime(duration)}</div>
+                </div>
+                <div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '4px' }}>Visual Events</div>
+                  <div style={{ fontSize: '1.2rem', fontFamily: 'var(--font-mono)' }}>{session?.events_count || 0}</div>
+                </div>
+                <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '4px' }}>Storage Location</div>
+                  <div style={{ fontSize: '0.9rem', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
+                    backend/video_engine/recordings/.../{session?.session_id}.mp4
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                <button className="capture-btn-primary" onClick={() => setStatus('idle')}>Start New Lecture</button>
+              </div>
+            </motion.div>
+          )}
+
+          {status === 'error' && (
+             <div className="glass-panel" style={{ padding: '3rem' }}>
+                <AlertCircle size={32} color="var(--danger)" style={{ marginBottom: '1rem' }} />
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Recording failed</h2>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>{errorMessage}</p>
+                <button className="capture-btn-secondary" onClick={() => setStatus('idle')}>Back to Setup</button>
+             </div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Right Column: Live Intelligence (Placeholder) */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-panel" style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2rem' }}>
+            <Activity size={18} color="var(--accent)" />
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.05em', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Live Intelligence</h3>
           </div>
 
-          {/* Right Column: Quick Actions & Live Polls */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div className="card">
-              <h3 style={{ fontSize: '18px', marginBottom: '16px' }}>Quick Actions</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', textAlign: 'left', border: '1px solid var(--primary-color)', background: 'rgba(99,102,241,0.05)' }}>
-                  <PlusCircle size={20} color="var(--primary-color)" />
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--primary-color)' }}>Create Live Poll</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Engage students instantly</div>
-                  </div>
-                </button>
-                <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', textAlign: 'left' }}>
-                  <CheckSquare size={20} />
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '14px' }}>Generate Quiz</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>AI creates quiz from lecture</div>
-                  </div>
-                </button>
-                <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', textAlign: 'left' }}>
-                  <FileText size={20} />
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '14px' }}>Export Attendance</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Download CSV report</div>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            <div className="card">
-              <h3 style={{ fontSize: '18px', marginBottom: '16px' }}>Student Performance</h3>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>Top students flagged for extra help this week.</p>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {[
-                  { name: 'Sarah Jenkins', issue: 'Missed 2 classes', color: 'var(--warning)' },
-                  { name: 'Michael Chen', issue: 'Failed Quiz #3', color: 'var(--secondary-color)' }
-                ].map((student, idx) => (
-                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 600 }}>{student.name.charAt(0)}</span>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
+             {status === 'idle' ? (
+                <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  Start recording to capture live events.
+                </div>
+             ) : status === 'recording' || status === 'paused' ? (
+                <>
+                  <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', borderLeft: '2px solid var(--accent)' }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginBottom: '4px' }}>00:00:00</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Activity size={14} color="var(--accent)" />
+                      <span>Session Started</span>
                     </div>
-                    <div>
-                      <h4 style={{ fontSize: '14px' }}>{student.name}</h4>
-                      <p style={{ fontSize: '12px', color: student.color }}>{student.issue}</p>
-                    </div>
-                    <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '12px', marginLeft: 'auto' }}>Message</button>
                   </div>
-                ))}
-              </div>
-            </div>
+                  {session?.events_count > 0 && (
+                    <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', borderLeft: '2px solid var(--success)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Monitor size={14} color="var(--success)" />
+                        <span>{session.events_count} Visual changes detected</span>
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    <span className="status-dot pulse" style={{ background: 'var(--accent)', marginRight: '8px' }} />
+                    Listening for events...
+                  </div>
+                </>
+             ) : (
+                <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  Session finalized.
+                </div>
+             )}
           </div>
-
         </div>
       </div>
+
     </div>
   );
-};
-
-export default TeacherDashboard;
+}
