@@ -128,7 +128,7 @@ const StudentDashboard = () => {
                     <h4 style={{ fontSize: '16px', marginBottom: '4px', marginTop: '4px' }}>{item.title}</h4>
                     <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{item.date}</span>
                   </div>
-                  <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '14px' }}>Resume</button>
+                  <Link to="/lectures/demo" className="btn-secondary" style={{ padding: '8px 16px', fontSize: '14px', textDecoration: 'none' }}>Resume</Link>
                 </div>
               ))}
             </div>

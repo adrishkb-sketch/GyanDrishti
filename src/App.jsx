@@ -5,6 +5,8 @@ import Login from './pages/Login';
 import StudentDashboard from './pages/StudentDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 
+import LectureViewer from './pages/LectureViewer';
+
 function App() {
   return (
     <Router>
@@ -13,6 +15,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard/student" element={<StudentDashboard />} />
         <Route path="/dashboard/teacher" element={<TeacherDashboard />} />
+        <Route path="/lectures/:lectureId" element={<LectureViewer />} />
       </Routes>
     </Router>
   );
