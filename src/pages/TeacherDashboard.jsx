@@ -278,45 +278,81 @@ export default function TeacherDashboard() {
         </AnimatePresence>
       </div>
 
-      {/* Right Column: Live Intelligence (Placeholder) */}
+      {/* Right Column: Live Intelligence Timeline */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div className="glass-panel" style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-panel" style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 4rem)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2rem' }}>
             <Activity size={18} color="var(--accent)" />
             <h3 style={{ fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.05em', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Live Intelligence</h3>
           </div>
 
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', paddingRight: '1rem' }}>
              {status === 'idle' ? (
                 <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)' }}>
                   Start recording to capture live events.
                 </div>
-             ) : status === 'recording' || status === 'paused' ? (
+             ) : (
                 <>
-                  <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', borderLeft: '2px solid var(--accent)' }}>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginBottom: '4px' }}>00:00:00</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Activity size={14} color="var(--accent)" />
-                      <span>Session Started</span>
+                  <div style={{ display: 'flex', gap: '12px', position: 'relative' }}>
+                    <div style={{ width: '2px', background: 'var(--border-color)', position: 'absolute', left: '11px', top: '24px', bottom: '-16px' }} />
+                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
+                      <Play size={12} color="var(--text-primary)" />
+                    </div>
+                    <div style={{ flex: 1, paddingBottom: '16px' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>00:00:00</div>
+                      <div style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: '0.95rem' }}>Session Started</div>
                     </div>
                   </div>
-                  {session?.events_count > 0 && (
-                    <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', borderLeft: '2px solid var(--success)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Monitor size={14} color="var(--success)" />
-                        <span>{session.events_count} Visual changes detected</span>
+
+                  <AnimatePresence>
+                    {session?.events?.map((evt, i) => {
+                      const isLast = i === session.events.length - 1 && status !== 'recording' && status !== 'paused';
+                      return (
+                        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} key={i} style={{ display: 'flex', gap: '12px', position: 'relative' }}>
+                          {!isLast && <div style={{ width: '2px', background: 'var(--border-color)', position: 'absolute', left: '11px', top: '24px', bottom: '-16px' }} />}
+                          <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(52, 211, 153, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
+                            <Monitor size={12} color="var(--success)" />
+                          </div>
+                          <div style={{ flex: 1, paddingBottom: '16px' }}>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                               {formatTime(Math.max(0, Math.floor(duration - (session.events.length - i) * 2)))} {/* Approximate time for now since we don't sync start_time cleanly to frontend yet */}
+                            </div>
+                            <div style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: '0.95rem' }}>
+                              Visual Change ({evt.source})
+                            </div>
+                            {evt.change_score && (
+                               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                 Score: {evt.change_score.toFixed(2)}
+                               </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                  
+                  {(status === 'recording' || status === 'paused') && (
+                    <div style={{ display: 'flex', gap: '12px', position: 'relative', marginTop: '8px' }}>
+                      <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
+                        <span className="status-dot pulse" style={{ background: 'var(--accent)', margin: 0 }} />
+                      </div>
+                      <div style={{ flex: 1, color: 'var(--text-muted)', fontSize: '0.9rem', paddingTop: '2px' }}>
+                        Listening for events...
                       </div>
                     </div>
                   )}
-                  <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                    <span className="status-dot pulse" style={{ background: 'var(--accent)', marginRight: '8px' }} />
-                    Listening for events...
-                  </div>
+
+                  {status === 'stopped' && (
+                    <div style={{ display: 'flex', gap: '12px', position: 'relative', marginTop: '8px' }}>
+                      <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
+                        <Square size={12} color="var(--text-primary)" />
+                      </div>
+                      <div style={{ flex: 1, color: 'var(--text-primary)', fontWeight: 500, fontSize: '0.95rem', paddingTop: '2px' }}>
+                        Session Finalized
+                      </div>
+                    </div>
+                  )}
                 </>
-             ) : (
-                <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  Session finalized.
-                </div>
              )}
           </div>
         </div>

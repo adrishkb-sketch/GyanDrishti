@@ -145,7 +145,8 @@ class SessionManager:
             "is_recording": self.is_recording,
             "is_paused": self.is_paused,
             "duration": int(self.duration),
-            "events_count": len(self.events)
+            "events_count": len(self.events),
+            "events": [evt.dict() if hasattr(evt, 'dict') else dict(evt) for evt in self.events]
         }
 
 manager = SessionManager()
