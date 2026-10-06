@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ArrowLeft, HardDrive, Clock, Calendar, BookOpen, Target, 
-  Lightbulb, Sigma, HelpCircle, MonitorPlay, ChevronDown, ChevronUp, PlayCircle 
+  Lightbulb, Sigma, HelpCircle, MonitorPlay, ChevronDown, ChevronUp, PlayCircle, Search, AlertTriangle, CheckCircle2
 } from 'lucide-react';
 import { mockLectureMemory } from '../mocks/lectureMemory';
 
@@ -14,6 +14,8 @@ export default function LectureViewer() {
   const lecture = mockLectureMemory;
 
   const [activeQuestion, setActiveQuestion] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
   const formatTime = (seconds) => {
     const h = Math.floor(seconds / 3600);
@@ -116,6 +118,42 @@ export default function LectureViewer() {
             </div>
           </header>
 
+          {/* Search UI */}
+          <section>
+            <div className="glass-panel" style={{ padding: '1.5rem 2rem', display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255,255,255,0.05)' }}>
+              <Search size={20} color="var(--text-muted)" />
+              <input 
+                type="text" 
+                placeholder="Ask your lecture memory... (e.g. 'What did the teacher say about Ohm's law?')" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: '1rem' }}
+              />
+              {searchQuery && (
+                <button onClick={() => setIsSearching(true)} style={{ background: 'var(--accent)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}>
+                  Search
+                </button>
+              )}
+            </div>
+            
+            {isSearching && (
+              <div className="glass-panel" style={{ marginTop: '1rem', padding: '2rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent)', marginBottom: '1rem' }}>
+                  <Search size={16} /> <span>Searching lecture memory... (Demo)</span>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>Found relevance: Ohm's Law</span>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Score: 0.95 | Timestamp: 10:32</span>
+                  </div>
+                  <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: 0 }}>
+                    The teacher explained Ohm's Law (I=V/R) and wrote it on the board.
+                  </p>
+                </div>
+              </div>
+            )}
+          </section>
+
           {/* Overview Section */}
           <section>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -133,7 +171,7 @@ export default function LectureViewer() {
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
               {lecture.concepts.map(concept => (
-                <div key={concept.id} className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', transition: 'transform 0.2s, box-shadow 0.2s', cursor: 'pointer' }} className="concept-card hover-lift">
+                <div key={concept.id} className="glass-panel hover-lift concept-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', transition: 'transform 0.2s, box-shadow 0.2s', cursor: 'pointer' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{concept.name}</h3>
                     <button onClick={(e) => { e.stopPropagation(); handleSeek(concept.timestamp); }} style={{ background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', fontFamily: 'var(--font-mono)' }}>
@@ -141,6 +179,20 @@ export default function LectureViewer() {
                     </button>
                   </div>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.6, margin: 0 }}>{concept.explanation}</p>
+                  
+                  {concept.evidence && (
+                    <div style={{ marginTop: '0.5rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600 }}>Why GyanDrishti Trusts This</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {concept.evidence.speech && <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>🎤 <strong>Speech:</strong> "{concept.evidence.speech}"</div>}
+                        {concept.evidence.visual && <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>👁 <strong>Visual:</strong> "{concept.evidence.visual}"</div>}
+                        <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 600, color: concept.evidence.status === 'CONFLICT' ? 'var(--danger)' : 'var(--success)' }}>
+                          {concept.evidence.status === 'CONFLICT' ? <AlertTriangle size={12} /> : <CheckCircle2 size={12} />}
+                          {concept.evidence.status}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -153,19 +205,40 @@ export default function LectureViewer() {
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {lecture.equations.map((eq, i) => (
-                <div key={i} className="glass-panel" style={{ padding: '2rem', display: 'flex', alignItems: 'center', gap: '2rem' }}>
-                  <div style={{ flex: 1 }}>
-                    <h4 style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--text-muted)', marginBottom: '1rem' }}>{eq.name}</h4>
-                    <div style={{ fontSize: '2rem', fontFamily: 'var(--font-mono)', fontWeight: 300, letterSpacing: '0.05em', color: 'var(--text-primary)' }}>
-                      {eq.representation}
+                <div key={i} className="glass-panel" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+                    <div style={{ flex: 1 }}>
+                      <h4 style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--text-muted)', marginBottom: '1rem' }}>{eq.name}</h4>
+                      <div style={{ fontSize: '2rem', fontFamily: 'var(--font-mono)', fontWeight: 300, letterSpacing: '0.05em', color: 'var(--text-primary)' }}>
+                        {eq.representation}
+                      </div>
+                    </div>
+                    <div style={{ flex: 1, borderLeft: '1px solid var(--border-color)', paddingLeft: '2rem' }}>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.6, margin: 0 }}>{eq.explanation}</p>
+                      <button onClick={() => handleSeek(eq.timestamp)} style={{ marginTop: '1rem', background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontFamily: 'var(--font-mono)', padding: 0 }}>
+                        <PlayCircle size={14} /> Jump to {formatTimelineTime(eq.timestamp)}
+                      </button>
                     </div>
                   </div>
-                  <div style={{ flex: 1, borderLeft: '1px solid var(--border-color)', paddingLeft: '2rem' }}>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.6, margin: 0 }}>{eq.explanation}</p>
-                    <button onClick={() => handleSeek(eq.timestamp)} style={{ marginTop: '1rem', background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontFamily: 'var(--font-mono)', padding: 0 }}>
-                      <PlayCircle size={14} /> Jump to {formatTimelineTime(eq.timestamp)}
-                    </button>
-                  </div>
+                  
+                  {eq.evidence && (
+                    <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600 }}>Evidence Explanation</div>
+                      <div style={{ display: 'flex', gap: '2rem' }}>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {eq.evidence.speech && <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>🎤 <strong>Speech:</strong> "{eq.evidence.speech}"</div>}
+                          {eq.evidence.visual && <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>👁 <strong>Visual:</strong> "{eq.evidence.visual}"</div>}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', fontWeight: 600, color: eq.evidence.status === 'CONFLICT' ? 'var(--danger)' : 'var(--success)' }}>
+                            {eq.evidence.status === 'CONFLICT' ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+                            {eq.evidence.status}
+                          </div>
+                          {eq.evidence.temporal_match && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>Temporal Match: {eq.evidence.temporal_match}</div>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

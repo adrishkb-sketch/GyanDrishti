@@ -334,82 +334,53 @@ export default function TeacherDashboard() {
         </AnimatePresence>
       </div>
 
-      {/* Right Column: Live Intelligence Timeline */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div className="glass-panel" style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 4rem)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2rem' }}>
+      {/* Right Column: Live Processing Pipeline */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        
+        {/* Pipeline Visualization */}
+        <div className="glass-panel" style={{ padding: '2rem', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
             <Activity size={18} color="var(--accent)" />
-            <h3 style={{ fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.05em', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Live Intelligence</h3>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.05em', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Live Processing Pipeline</h3>
           </div>
 
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', paddingRight: '1rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
              {status === 'idle' ? (
-                <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  Start recording to capture live events.
+                <div style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  Start lecture to initialize engine.
                 </div>
              ) : (
-                <>
-                  <div style={{ display: 'flex', gap: '12px', position: 'relative' }}>
-                    <div style={{ width: '2px', background: 'var(--border-color)', position: 'absolute', left: '11px', top: '24px', bottom: '-16px' }} />
-                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
-                      <Play size={12} color="var(--text-primary)" />
-                    </div>
-                    <div style={{ flex: 1, paddingBottom: '16px' }}>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>00:00:00</div>
-                      <div style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: '0.95rem' }}>Session Started</div>
-                    </div>
-                  </div>
-
-                  <AnimatePresence>
-                    {session?.events?.map((evt, i) => {
-                      const isLast = i === session.events.length - 1 && status !== 'recording' && status !== 'paused';
-                      return (
-                        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} key={i} style={{ display: 'flex', gap: '12px', position: 'relative' }}>
-                          {!isLast && <div style={{ width: '2px', background: 'var(--border-color)', position: 'absolute', left: '11px', top: '24px', bottom: '-16px' }} />}
-                          <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(52, 211, 153, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
-                            <Monitor size={12} color="var(--success)" />
-                          </div>
-                          <div style={{ flex: 1, paddingBottom: '16px' }}>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                               {formatTime(Math.max(0, Math.floor(duration - (session.events.length - i) * 2)))} {/* Approximate time for now since we don't sync start_time cleanly to frontend yet */}
-                            </div>
-                            <div style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: '0.95rem' }}>
-                              Visual Change ({evt.source})
-                            </div>
-                            {evt.change_score && (
-                               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                                 Score: {evt.change_score.toFixed(2)}
-                               </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </AnimatePresence>
-                  
-                  {(status === 'recording' || status === 'paused') && (
-                    <div style={{ display: 'flex', gap: '12px', position: 'relative', marginTop: '8px' }}>
-                      <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
-                        <span className="status-dot pulse" style={{ background: 'var(--accent)', margin: 0 }} />
-                      </div>
-                      <div style={{ flex: 1, color: 'var(--text-muted)', fontSize: '0.9rem', paddingTop: '2px' }}>
-                        Listening for events...
-                      </div>
-                    </div>
-                  )}
-
-                  {status === 'stopped' && (
-                    <div style={{ display: 'flex', gap: '12px', position: 'relative', marginTop: '8px' }}>
-                      <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
-                        <Square size={12} color="var(--text-primary)" />
-                      </div>
-                      <div style={{ flex: 1, color: 'var(--text-primary)', fontWeight: 500, fontSize: '0.95rem', paddingTop: '2px' }}>
-                        Session Finalized
-                      </div>
-                    </div>
-                  )}
-                </>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <PipelineStage icon="🎤" label="Speech Recognition" state={status === 'recording' ? 'processing' : (status === 'stopped' ? 'completed' : 'pending')} />
+                  <PipelineStage icon="👁" label="Visual Perception" state={status === 'recording' ? 'processing' : (status === 'stopped' ? 'completed' : 'pending')} />
+                  <PipelineStage icon="🔗" label="Temporal Fusion" state={duration > 5 && status === 'recording' ? 'processing' : (status === 'stopped' ? 'completed' : 'pending')} />
+                  <PipelineStage icon="🧠" label="Semantic Understanding" state={duration > 10 && status === 'recording' ? 'processing' : (status === 'stopped' ? 'completed' : 'pending')} />
+                  <PipelineStage icon="🛡" label="Evidence Grounding" state={duration > 15 && status === 'recording' ? 'processing' : (status === 'stopped' ? 'completed' : 'pending')} />
+                  <PipelineStage icon="📚" label="Lecture Memory" state={duration > 20 && status === 'recording' ? 'processing' : (status === 'stopped' ? 'completed' : 'pending')} />
+                </div>
              )}
+          </div>
+        </div>
+
+        {/* Live Transcript (Demo) */}
+        <div className="glass-panel" style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', maxHeight: '400px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}>
+            <Mic size={18} color="var(--success)" />
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.05em', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Live Transcript</h3>
+          </div>
+          
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {status === 'idle' ? (
+               <div style={{ margin: 'auto', color: 'var(--text-muted)' }}>Waiting for speech...</div>
+            ) : (
+               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                 {duration > 2 && <TranscriptLine time="00:02" text="Alright everyone, let's get started." />}
+                 {duration > 15 && <TranscriptLine time="00:15" text="Today we're going to talk about basic electrical engineering." />}
+                 {duration > 30 && <TranscriptLine time="00:30" text="First, let's review Ohm's law." />}
+                 {duration > 42 && <TranscriptLine time="00:42" text="Current is equal to voltage divided by resistance." />}
+                 {status === 'recording' && <div style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}><span className="status-dot pulse" style={{ background: 'var(--text-muted)', margin: 0 }} /> Listening...</div>}
+               </div>
+            )}
           </div>
         </div>
       </div>
@@ -417,3 +388,43 @@ export default function TeacherDashboard() {
     </div>
   );
 }
+
+// Helper components for the pipeline
+function PipelineStage({ icon, label, state }) {
+  const colors = {
+    pending: 'var(--text-muted)',
+    processing: 'var(--accent)',
+    completed: 'var(--success)',
+    error: 'var(--danger)'
+  };
+  const bgs = {
+    pending: 'rgba(255,255,255,0.05)',
+    processing: 'rgba(94, 106, 210, 0.1)',
+    completed: 'rgba(52, 211, 153, 0.1)',
+    error: 'rgba(248, 113, 113, 0.1)'
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: bgs[state], borderRadius: '8px', border: `1px solid ${state === 'processing' ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.3s' }}>
+      <div style={{ fontSize: '1.2rem' }}>{icon}</div>
+      <div style={{ flex: 1, fontWeight: 500, color: 'var(--text-primary)' }}>{label}</div>
+      <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 600, color: colors[state], display: 'flex', alignItems: 'center', gap: '6px' }}>
+        {state === 'processing' && <span className="status-dot pulse" style={{ background: colors[state], margin: 0 }} />}
+        {state}
+      </div>
+    </div>
+  );
+}
+
+function TranscriptLine({ time, text }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', gap: '12px' }}>
+      <div style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', paddingTop: '2px' }}>{time}</div>
+      <div style={{ flex: 1, fontSize: '0.95rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+        <span style={{ color: 'var(--accent)', fontWeight: 500, marginRight: '8px', fontSize: '0.8rem' }}>TEACHER</span>
+        {text}
+      </div>
+    </motion.div>
+  );
+}
+

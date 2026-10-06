@@ -1,86 +1,112 @@
 export const mockLectureMemory = {
   session_id: "lecture_20261006_143000",
-  title: "Introduction to Quantum Mechanics",
-  subject: "Physics 401",
+  title: "Basic Electrical Engineering",
+  subject: "EE 101",
   date: "October 6, 2026",
-  duration: 6120, // 1h 42m in seconds
+  duration: 3600, // 1h in seconds
   storage_local: true,
-  overview: "This lecture introduces the foundational concepts of quantum mechanics, moving away from classical deterministic physics into probabilistic models. We cover the wave-particle duality, the Schrödinger equation, and the uncertainty principle.",
+  overview: "This lecture introduces the foundational concepts of electrical engineering. We cover Ohm's Law and Kirchhoff's laws, including their practical applications in basic circuit analysis.",
   
   timeline_events: [
-    { timestamp: 120, type: "speech", label: "Speech", details: "Welcome to Physics 401. Today we begin our journey into Quantum Mechanics." },
-    { timestamp: 450, type: "concept", label: "Important concept", details: "Wave-Particle Duality introduced." },
-    { timestamp: 900, type: "visual", label: "Visual change", details: "Slide changed: Double-Slit Experiment" },
-    { timestamp: 1420, type: "equation", label: "Equation", details: "Schrödinger Equation written on board." },
-    { timestamp: 2400, type: "multimodal", label: "Multimodal", details: "Professor points to probability distribution graph while explaining Born rule." },
-    { timestamp: 3500, type: "concept", label: "Important concept", details: "Heisenberg's Uncertainty Principle." }
+    { timestamp: 632, type: "concept", label: "Important concept", details: "Teacher explains Ohm's Law" }, // 10:32
+    { timestamp: 641, type: "visual", label: "Visual change", details: "Board shows: I = V/R" }, // 10:41
+    { timestamp: 644, type: "multimodal", label: "Multimodal agreement", details: "Speech + visual evidence agree" }, // 10:44
+    { timestamp: 680, type: "concept", label: "Important concept", details: "Teacher discusses Kirchhoff's law" }, // 11:20
+    { timestamp: 702, type: "multimodal", label: "Conflict detected", details: "Visual evidence conflicts with speech" } // 11:42
   ],
 
   concepts: [
     {
       id: "c1",
-      name: "Wave-Particle Duality",
-      explanation: "The concept that every particle or quantum entity may be described as either a particle or a wave. It expresses the inability of the classical concepts 'particle' or 'wave' to fully describe the behavior of quantum-scale objects.",
-      timestamp: 450
+      name: "Ohm's Law",
+      explanation: "A fundamental law stating that the current through a conductor between two points is directly proportional to the voltage across the two points. It is typically represented as I = V/R.",
+      timestamp: 632,
+      evidence: {
+        speech: "Current is equal to voltage divided by resistance.",
+        visual: "I = V/R",
+        status: "MULTIMODAL SUPPORTED"
+      }
     },
     {
       id: "c2",
-      name: "Heisenberg's Uncertainty Principle",
-      explanation: "States that there is a fundamental limit to the precision with which certain pairs of physical properties of a particle, known as complementary variables (like position and momentum), can be known.",
-      timestamp: 3500
+      name: "Kirchhoff's Laws",
+      explanation: "Includes Kirchhoff's Current Law (KCL) which states that the total current entering a junction must equal the total current leaving it, and Kirchhoff's Voltage Law (KVL) which states that the sum of all voltages around any closed loop in a circuit must equal zero.",
+      timestamp: 680,
+      evidence: {
+        speech: "The sum of currents entering a node is zero.",
+        visual: "Sum(I) = 0",
+        status: "MULTIMODAL SUPPORTED"
+      }
     }
   ],
 
   definitions: [
     {
-      term: "Wavefunction (Ψ)",
-      definition: "A mathematical description of the quantum state of an isolated quantum system. The probability density of finding a particle at a given point is proportional to the square of the magnitude of the wavefunction.",
-      timestamp: 1200
+      term: "Current (I)",
+      definition: "The rate of flow of electric charge.",
+      timestamp: 635
     }
   ],
 
   equations: [
     {
-      name: "Time-Dependent Schrödinger Equation",
-      representation: "iℏ ∂Ψ/∂t = ĤΨ",
-      explanation: "Describes how the quantum state of a physical system changes in time. Ĥ is the Hamiltonian operator, representing the total energy of the system.",
-      timestamp: 1420
+      name: "Ohm's Law Equation",
+      representation: "I = V/R",
+      explanation: "Calculates current (I) given voltage (V) and resistance (R).",
+      timestamp: 641,
+      evidence: {
+        speech: "current is equal to voltage divided by resistance",
+        visual: "I = V/R",
+        status: "MULTIMODAL SUPPORTED",
+        temporal_match: "10:44"
+      }
+    },
+    {
+      name: "Incorrect Equation Example",
+      representation: "I = V × R",
+      explanation: "This equation is incorrectly written on the board during a discussion about power.",
+      timestamp: 702,
+      evidence: {
+        speech: "I = V/R",
+        visual: "I = V×R",
+        status: "CONFLICT",
+        temporal_match: "11:42"
+      }
     }
   ],
 
   important_points: [
-    { point: "Classical physics fails at the atomic scale because it predicts deterministic outcomes.", timestamp: 300 },
-    { point: "The act of measurement in quantum mechanics collapses the wavefunction.", timestamp: 4200 },
-    { point: "Quantum entanglement implies non-local correlations between particles.", timestamp: 5400 }
+    { point: "Ohm's Law only applies to ohmic materials where resistance is constant.", timestamp: 650 },
+    { point: "Kirchhoff's Current Law is based on the conservation of charge.", timestamp: 690 }
   ],
 
   visual_references: [
     {
-      timestamp: 900,
-      source: "Screen",
-      event_type: "Slide Change",
-      local_frame_reference: "Double Slit Experiment Setup", // Using text placeholder instead of actual image paths
-      description: "Diagram showing interference pattern from electron beam."
-    },
-    {
-      timestamp: 2400,
+      timestamp: 641,
       source: "Camera",
       event_type: "Board Writing",
-      local_frame_reference: "Probability Density Graph",
-      description: "Hand-drawn graph of a Gaussian wave packet."
+      local_frame_reference: "I = V/R on whiteboard",
+      description: "Teacher writes Ohm's Law on the board."
+    },
+    {
+      timestamp: 702,
+      source: "Camera",
+      event_type: "Board Writing",
+      local_frame_reference: "Conflicting Equation",
+      description: "Teacher accidentally writes I = V×R while saying I = V/R."
     }
   ],
 
   revision_questions: [
     {
-      question: "What is the physical significance of the squared magnitude of a wavefunction (|Ψ|²)?",
-      answer: "According to the Born rule, |Ψ|² represents the probability density of finding a particle at a specific position and time.",
-      timestamp: 2500
+      question: "According to Ohm's Law, what happens to the current if the resistance is doubled while the voltage remains constant?",
+      answer: "The current will be halved.",
+      timestamp: 645
     },
     {
-      question: "Why can't we know both the exact position and exact momentum of an electron simultaneously?",
-      answer: "Due to Heisenberg's Uncertainty Principle, which states that the product of the uncertainties in position and momentum must be greater than or equal to ℏ/2.",
-      timestamp: 3600
+      question: "What conservation principle is Kirchhoff's Current Law based on?",
+      answer: "The conservation of electric charge.",
+      timestamp: 695
     }
   ]
 };
