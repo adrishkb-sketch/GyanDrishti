@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, MessageSquare, PlayCircle, Clock, Search, LogOut, TrendingUp, Calendar, Bell, ChevronRight, Award } from 'lucide-react';
+import { BookOpen, MessageSquare, PlayCircle, Clock, Search, LogOut, TrendingUp, Calendar, Bell, ChevronRight, Award, Video } from 'lucide-react';
 
 const StudentDashboard = () => {
   return (
@@ -16,6 +16,9 @@ const StudentDashboard = () => {
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
           <Link to="#" className="nav-item active">
             <BookOpen size={20} /> Dashboard
+          </Link>
+          <Link to="/dashboard/teacher" className="nav-item">
+            <Video size={20} /> Record Lecture
           </Link>
           <Link to="#" className="nav-item">
             <PlayCircle size={20} /> My Courses
