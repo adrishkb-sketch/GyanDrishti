@@ -51,11 +51,23 @@ def test_romanized_hinglish() -> None:
     assert "en" in langs
 
 
+def test_romanized_hinglish_short_phrase() -> None:
+    text = "hello bol do"
+    langs = detect_segment_languages(text)
+    assert "hi" in langs
+
+
 def test_romanized_banglish() -> None:
     text = "Ekhane amra basically flux-er change-ta dekhchi."
     langs = detect_segment_languages(text)
     assert "bn" in langs
     assert "en" in langs
+
+
+def test_romanized_banglish_short_phrase() -> None:
+    text = "Amar Naam"
+    langs = detect_segment_languages(text)
+    assert "bn" in langs
 
 
 def test_three_way_mixed() -> None:

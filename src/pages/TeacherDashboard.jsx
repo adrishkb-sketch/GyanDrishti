@@ -9,6 +9,155 @@ import {
 } from 'lucide-react';
 import * as api from '../api/video';
 
+// Comprehensive Transliterated Indic Lexicons for Code-Switched Classroom Speech
+const BANGLISH_WORDS = new Set([
+  'amar', 'aamar', 'amra', 'aamra', 'tomar', 'tumi', 'apni', 'apnar', 'naam', 'nam',
+  'ekhane', 'okhane', 'kothay', 'kobe', 'ki', 'kintu', 'ebong', 'aar', 'ar', 'hobe',
+  'holo', 'hoy', 'ache', 'achhe', 'chilo', 'kore', 'kora', 'korbo', 'korchi',
+  'korchen', 'korun', 'dekhbo', 'dekhun', 'dekhte', 'dekhchi', 'bujhte', 'bujhecho',
+  'bujhlen', 'shob', 'sob', 'shuru', 'shesh', 'sutro', 'sutra', 'shoutro', 'shobai',
+  'bhalo', 'thik', 'shunchen', 'shuno', 'bolun', 'bolchi', 'bolte', 'bolbo', 'bolo',
+  'eta', 'sheta', 'seta', 'ei', 'oi', 'theke', 'diye', 'jabe', 'jaay', 'jachhi',
+  'porbo', 'porashona', 'porun', 'torit', 'probaho', 'rodh', 'bibhob', 'khub',
+  'keno', 'kake', 'kon', 'bhai', 'dada', 'didi', 'mone', 'rakhben', 'rakho',
+  'ashun', 'eso', 'shikhi', 'shikhbo', 'bojhate', 'uttor', 'prosno', 'khata',
+  'kolom', 'dekha', 'shona', 'likhe', 'likhun', 'likhbo', 'jaani', 'jaanen',
+  'kemon', 'acho', 'achhen', 'barabar', 'prothom', 'ditio', 'shomosya', 'poriborton',
+  'somoy', 'dhore', 'jodi', 'tobe', 'karon', 'tai', 'shobcheye', 'boro', 'choto'
+]);
+
+const HINGLISH_WORDS = new Set([
+  'bol', 'bolo', 'batao', 'boliye', 'bataiye', 'bolte', 'bolna', 'do', 'bhai',
+  'bhaiya', 'kya', 'hai', 'hain', 'ho', 'hoon', 'hun', 'tha', 'thi', 'the',
+  'hum', 'ham', 'hamara', 'hamari', 'aap', 'aapka', 'aapki', 'tum', 'tumhara',
+  'tumhari', 'mera', 'meri', 'mere', 'tera', 'teri', 'tere', 'iska', 'uski',
+  'iske', 'uska', 'uske', 'unka', 'unki', 'unke', 'karo', 'karna', 'karenge',
+  'karte', 'karti', 'kijiye', 'dekh', 'dekho', 'dekhiye', 'dekhna', 'samajh',
+  'samjhe', 'samjho', 'samjhiye', 'hota', 'hoti', 'hote', 'hoga', 'hogi', 'hoge',
+  'honge', 'aur', 'lekin', 'magar', 'par', 'pehle', 'phir', 'baad', 'yeh', 'ye',
+  'woh', 'wo', 'voh', 'kaise', 'kese', 'kyun', 'kyon', 'kaha', 'kahan', 'kab',
+  'toh', 'to', 'bhi', 'kuch', 'sab', 'sabko', 'sabka', 'padho', 'padhenge',
+  'padhna', 'padhiye', 'sun', 'suno', 'suniye', 'raha', 'rahe', 'rahi', 'accha',
+  'achha', 'theek', 'thik', 'niyam', 'dhara', 'vidyut', 'chalo', 'chaliye',
+  'seekhenge', 'sikho', 'sikhna', 'dhyan', 'barabar', 'sawal', 'jawaab', 'socho',
+  'likho', 'likhiye', 'likhna', 'shuru', 'karein', 'aaj', 'kal', 'sirf', 'bas'
+]);
+
+const INDIC_GLOSS_MAP = {
+  'amar naam': 'আমার নাম',
+  'aamar naam': 'আমার নাম',
+  'kemon acho': 'কেমন আছো',
+  'kemon achen': 'কেমন আছেন',
+  'bhalo acho': 'ভালো আছো',
+  'ei sutro': 'এই সূত্র',
+  'ei sutra': 'এই সূত্র',
+  'shuru korbo': 'শুরু করব',
+  'dekhun ekhane': 'দেখুন এখানে',
+  'dekhte pachho': 'দেখতে পাচ্ছ',
+  'bujhte parche': 'বুঝতে পারছি',
+  'bujhe gecho': 'বুঝে গেছ',
+  'mone rakhben': 'মনে রাখবেন',
+  'ki bolcho': 'কি বলছ',
+  'ki bolchen': 'কি বলছেন',
+  'dhanyabad': 'ধন্যবাদ',
+  'namaskar': 'নমস্কার',
+  'bol do': 'बोल दो',
+  'hello bol do': 'हेलो बोल दो',
+  'mera naam': 'मेरा नाम',
+  'meri baat': 'मेरी बात',
+  'kya bol': 'क्या बोल',
+  'kaise ho': 'कैसे हो',
+  'kaise hain': 'कैसे हैं',
+  'samajh aaya': 'समझ आया',
+  'samajh gaye': 'समझ गए',
+  'ye niyam': 'यह नियम',
+  'yeh sutra': 'यह सूत्र',
+  'padhenge aaj': 'पढ़ेंगे आज',
+  'dekho yahan': 'देखो यहाँ',
+  'dhyan se': 'ध्यान से',
+  'sun lo': 'सुन लो',
+  'bata do': 'बता दो',
+  'chalo shuru': 'चलो शुरू',
+  'shukriya': 'शुक्रिया',
+  'namaste': 'नमस्ते'
+};
+
+const getIndicGloss = (text, lang) => {
+  if (!text || /[\u0980-\u09FF\u0900-\u097F]/.test(text)) return null;
+  const lower = text.toLowerCase().trim();
+
+  for (const [latin, native] of Object.entries(INDIC_GLOSS_MAP)) {
+    if (lower.includes(latin)) return native;
+  }
+
+  if (lang === 'bn-IN') {
+    if (lower.includes('amar') && lower.includes('naam')) return 'আমার নাম';
+    if (lower.includes('sutro')) return 'সূত্র';
+    if (lower.includes('torit')) return 'তড়িৎ';
+    if (lower.includes('probaho')) return 'প্রবাহ';
+    if (lower.includes('rodh')) return 'রোধ';
+  } else if (lang === 'hi-IN') {
+    if (lower.includes('bol') && lower.includes('do')) return 'बोल दो';
+    if (lower.includes('mera') && lower.includes('naam')) return 'मेरा नाम';
+    if (lower.includes('niyam')) return 'नियम';
+    if (lower.includes('dhara')) return 'धारा';
+    if (lower.includes('vidyut')) return 'विद्युत';
+  }
+  return null;
+};
+
+const detectTextLanguage = (text, activeLang = 'en-IN') => {
+  if (!text) return activeLang;
+  // 1. Direct Native Unicode Script Checking
+  if (/[\u0980-\u09FF]/.test(text)) return 'bn-IN';
+  if (/[\u0900-\u097F]/.test(text)) return 'hi-IN';
+
+  const rawTokens = text.toLowerCase().match(/\b[a-z]+\b/g) || [];
+  if (rawTokens.length === 0) return 'en-IN';
+
+  let banglaScore = 0;
+  let hindiScore = 0;
+  const lowerText = text.toLowerCase();
+
+  // High-confidence bigram / phrase triggers (+10 score guarantee)
+  if (
+    lowerText.includes('amar naam') ||
+    lowerText.includes('aamar naam') ||
+    lowerText.includes('ki bol') ||
+    lowerText.includes('ei sutro') ||
+    lowerText.includes('kemon acho') ||
+    lowerText.includes('shuru korbo')
+  ) {
+    banglaScore += 10;
+  }
+  if (
+    lowerText.includes('bol do') ||
+    lowerText.includes('mera naam') ||
+    lowerText.includes('kya bol') ||
+    lowerText.includes('ye niyam') ||
+    lowerText.includes('kaise ho') ||
+    lowerText.includes('chalo shuru')
+  ) {
+    hindiScore += 10;
+  }
+
+  for (const token of rawTokens) {
+    if (BANGLISH_WORDS.has(token)) banglaScore += 2;
+    if (HINGLISH_WORDS.has(token)) hindiScore += 2;
+  }
+
+  if (banglaScore > hindiScore && banglaScore >= 2) return 'bn-IN';
+  if (hindiScore > banglaScore && hindiScore >= 2) return 'hi-IN';
+
+  if (activeLang === 'bn-IN' && banglaScore > 0) return 'bn-IN';
+  if (activeLang === 'hi-IN' && hindiScore > 0) return 'hi-IN';
+
+  if (activeLang === 'bn-IN' && !hindiScore) return 'bn-IN';
+  if (activeLang === 'hi-IN' && !banglaScore) return 'hi-IN';
+
+  return 'en-IN';
+};
+
 export default function TeacherDashboard() {
   const navigate = useNavigate();
 
@@ -187,12 +336,13 @@ export default function TeacherDashboard() {
           const finalTxt = item[0].transcript.trim();
           if (finalTxt) {
             const currentTs = formatTime(durationRef.current);
-            const detectedLang = detectTextLanguage(finalTxt);
+            const detectedLang = detectTextLanguage(finalTxt, selectedLanguage);
+            const glossText = getIndicGloss(finalTxt, detectedLang);
 
-            // 1. Add strictly real spoken sentence to live transcript
+            // 1. Add strictly real spoken sentence to live transcript with Indic gloss
             setTranscriptLines(prev => [
               ...prev,
-              { time: currentTs, text: finalTxt, lang: detectedLang, live: false }
+              { time: currentTs, text: finalTxt, gloss: glossText, lang: detectedLang, live: false }
             ]);
             setCurrentSpeech('');
 
@@ -235,68 +385,6 @@ export default function TeacherDashboard() {
     };
   }, [selectedLanguage, status]);
 
-  // Transliterated Indic Lexicon Sets for Banglish & Hinglish Detection
-  const BANGLISH_WORDS = new Set([
-    'amar', 'amra', 'aamra', 'tomar', 'tumi', 'apni', 'apnar', 'naam', 'nam',
-    'ekhane', 'okhane', 'kothay', 'ki', 'kintu', 'ebong', 'aar', 'ar', 'hobe',
-    'holo', 'hoy', 'ache', 'achhe', 'chilo', 'kore', 'kora', 'korbo', 'korchi',
-    'korun', 'dekhbo', 'dekhun', 'dekhte', 'dekhchi', 'bujhte', 'bujhecho',
-    'shob', 'sob', 'shuru', 'shesh', 'sutro', 'shoutro', 'shobai', 'bhalo',
-    'thik', 'shunchen', 'bolun', 'bolchi', 'bolte', 'eta', 'sheta', 'seta',
-    'ei', 'oi', 'theke', 'diye', 'jabe', 'jaay', 'porbo', 'porashona', 'torit',
-    'probaho', 'rodh', 'bibhob', 'khub', 'keno', 'bhai'
-  ]);
-
-  const HINGLISH_WORDS = new Set([
-    'bol', 'do', 'bhai', 'kya', 'hai', 'hain', 'hum', 'ham', 'aap', 'tum',
-    'mera', 'tera', 'iska', 'uski', 'unka', 'karo', 'karna', 'karenge',
-    'karte', 'dekh', 'dekho', 'samajh', 'samjhe', 'samjho', 'hota', 'hoti',
-    'hote', 'hoga', 'hogi', 'aur', 'lekin', 'par', 'pehle', 'phir', 'baad',
-    'yeh', 'ye', 'woh', 'voh', 'kaise', 'kese', 'kyun', 'toh', 'to', 'kuch',
-    'sab', 'sabko', 'padho', 'padhenge', 'sun', 'suno', 'raha', 'rahe',
-    'rahi', 'accha', 'theek', 'niyam', 'dhara', 'vidyut', 'batao', 'bolo',
-    'chalo', 'seekhenge', 'sikho'
-  ]);
-
-  // Enhanced Language & Transliteration Classifier (Detects Bengali, Hindi, and English even in Romanized text!)
-  const detectTextLanguage = (text) => {
-    // 1. Direct Native Unicode Script Checking
-    if (/[\u0980-\u09FF]/.test(text)) return 'bn-IN'; // Native Bengali Script
-    if (/[\u0900-\u097F]/.test(text)) return 'hi-IN'; // Native Devanagari Script
-
-    // 2. Tokenized Transliteration Scoring (Banglish vs. Hinglish vs. English)
-    const rawTokens = text.toLowerCase().match(/\b[a-z]+\b/g) || [];
-    if (rawTokens.length === 0) return 'en-IN';
-
-    let banglaScore = 0;
-    let hindiScore = 0;
-
-    // Check specific high-confidence phrases / bigrams
-    const lowerText = text.toLowerCase();
-    if (lowerText.includes('amar naam') || lowerText.includes('aamar naam') || lowerText.includes('ki bol') || lowerText.includes('ei sutro')) {
-      banglaScore += 5;
-    }
-    if (lowerText.includes('bol do') || lowerText.includes('mera naam') || lowerText.includes('kya bol') || lowerText.includes('ye niyam')) {
-      hindiScore += 5;
-    }
-
-    // Token frequency count
-    for (const token of rawTokens) {
-      if (BANGLISH_WORDS.has(token)) banglaScore += 2;
-      if (HINGLISH_WORDS.has(token)) hindiScore += 2;
-    }
-
-    // Disambiguate with clear margin
-    if (banglaScore > hindiScore && banglaScore >= 2) return 'bn-IN';
-    if (hindiScore > banglaScore && hindiScore >= 2) return 'hi-IN';
-
-    // If explicit selector was set and there is at least one Indic marker
-    if (selectedLanguage === 'bn-IN' && banglaScore > 0) return 'bn-IN';
-    if (selectedLanguage === 'hi-IN' && hindiScore > 0) return 'hi-IN';
-
-    return 'en-IN'; // Standard English
-  };
-
   // Real-time concept and formula extraction from ACTUAL user speech (Bengali / Hindi / English)
   const analyzeRealSpeech = (text, timeStr, langCode) => {
     const lower = text.toLowerCase();
@@ -306,37 +394,55 @@ export default function TeacherDashboard() {
       let conceptName = 'বাংলা বক্তৃতা (Bengali Discussion)';
       if (lower.includes('amar naam') || lower.includes('naam') || text.includes('নাম')) {
         conceptName = 'পরিচয় ও সূচনা (Speaker Introduction)';
-      } else if (lower.includes('sutro') || lower.includes('ohm') || text.includes('সূত্র')) {
-        conceptName = 'ওহমের সূত্র (Ohm\'s Law)';
-      } else if (lower.includes('torit') || lower.includes('probaho') || text.includes('প্রবাহ')) {
-        conceptName = 'তড়িৎ প্রবাহ (Electric Current)';
-      } else if (lower.includes('rodh') || text.includes('রোধ')) {
-        conceptName = 'রোধের পরিমাপ (Resistance)';
+      } else if (lower.includes('kemon acho') || lower.includes('kemon achen') || text.includes('কেমন আছো') || text.includes('কেমন আছেন')) {
+        conceptName = 'কুশলবিনিময় ও অভিবাদন (Greeting & Rapport)';
+      } else if (lower.includes('sutro') || lower.includes('ohm') || text.includes('সূত্র') || text.includes('ওহম')) {
+        conceptName = 'ওহমের সূত্র (Ohm\'s Law Relation)';
+      } else if (lower.includes('torit') || lower.includes('probaho') || text.includes('তড়িৎ') || text.includes('প্রবাহ')) {
+        conceptName = 'তড়িৎ প্রবাহের নীতি (Electric Current & Flow)';
+      } else if (lower.includes('rodh') || text.includes('রোধ') || lower.includes('resistance')) {
+        conceptName = 'তড়িৎ রোধ ও পরিবাহিতা (Resistance & Conductance)';
+      } else if (lower.includes('bibhob') || text.includes('বিভব') || lower.includes('voltage')) {
+        conceptName = 'বিভবপ্রভেদ ও শক্তি (Potential Difference)';
+      } else if (lower.includes('shokti') || text.includes('শক্তি') || lower.includes('power')) {
+        conceptName = 'বৈদ্যুতিক ক্ষমতা ও শক্তি (Electrical Power)';
       }
 
       addRealConcept(conceptName, text, timeStr, 'বাংলা (Bengali)');
 
-      if (text.includes('সমান') || lower.includes('soman') || lower.includes('i =') || lower.includes('v =')) {
-        addRealEquation("I = V / R", "তড়িৎ প্রবাহ = বিভবপ্রভেদ / রোধ", timeStr);
+      if (text.includes('সমান') || lower.includes('soman') || lower.includes('sutro') || text.includes('সূত্র') || lower.includes('i =') || lower.includes('v =')) {
+        addRealEquation("I = V / R", "তড়িৎ প্রবাহ = বিভবপ্রভেদ / রোধ (Ohm's Law)", timeStr);
+      }
+      if (text.includes('শক্তি') || lower.includes('shokti') || lower.includes('p =') || lower.includes('power')) {
+        addRealEquation("P = V · I = I²·R", "বৈদ্যুতিক ক্ষমতা = বিভবপ্রভেদ × প্রবাহ", timeStr);
       }
     }
     // 2. Hindi Speech Processing (Native Script OR Transliterated Hinglish like "hello bol do")
     else if (langCode === 'hi-IN' || /[\u0900-\u097F]/.test(text)) {
       let conceptName = 'हिंदी व्याख्यान (Hindi Discussion)';
-      if (lower.includes('bol do') || lower.includes('hello') || lower.includes('namaste')) {
+      if (lower.includes('bol do') || lower.includes('hello') || lower.includes('namaste') || text.includes('नमस्ते') || text.includes('हेलो')) {
         conceptName = 'कक्षा अभिवादन एवं निर्देश (Classroom Greeting & Directive)';
-      } else if (lower.includes('niyam') || lower.includes('ohm') || text.includes('नियम')) {
-        conceptName = 'ओम का नियम (Ohm\'s Law)';
-      } else if (lower.includes('dhara') || lower.includes('vidyut') || text.includes('धारा')) {
-        conceptName = 'विद्युत धारा (Electric Current)';
-      } else if (lower.includes('pratirodh') || text.includes('प्रतिरोध')) {
-        conceptName = 'विद्युत प्रतिरोध (Resistance)';
+      } else if (lower.includes('kaise ho') || lower.includes('kya haal') || text.includes('कैसे हो')) {
+        conceptName = 'कुशलक्षेम एवं कक्षा समन्वय (Rapport & Check-in)';
+      } else if (lower.includes('niyam') || lower.includes('ohm') || text.includes('नियम') || text.includes('ओम')) {
+        conceptName = 'ओम का नियम (Ohm\'s Law Relation)';
+      } else if (lower.includes('dhara') || lower.includes('vidyut') || text.includes('धारा') || text.includes('विद्युत')) {
+        conceptName = 'विद्युत धारा की संकल्पना (Electric Current Concept)';
+      } else if (lower.includes('pratirodh') || text.includes('प्रतिरोध') || lower.includes('resistance')) {
+        conceptName = 'विद्युत प्रतिरोध एवं चालकता (Resistance & Conductance)';
+      } else if (lower.includes('vibhvantar') || text.includes('विभवांतर') || lower.includes('voltage')) {
+        conceptName = 'विभवांतर एवं विभव (Potential Difference)';
+      } else if (lower.includes('shakti') || lower.includes('urja') || text.includes('ऊर्जा') || text.includes('शक्ति')) {
+        conceptName = 'विद्युत शक्ति एवं ऊर्जा (Electrical Power & Energy)';
       }
 
       addRealConcept(conceptName, text, timeStr, 'हिन्दी (Hindi)');
 
-      if (text.includes('बराबर') || lower.includes('barabar') || lower.includes('i =') || lower.includes('v =')) {
-        addRealEquation("I = V / R", "विद्युत धारा = विभवांतर / प्रतिरोध", timeStr);
+      if (text.includes('बराबर') || lower.includes('barabar') || lower.includes('niyam') || text.includes('नियम') || lower.includes('i =') || lower.includes('v =')) {
+        addRealEquation("I = V / R", "विद्युत धारा = विभवांतर / प्रतिरोध (Ohm's Law)", timeStr);
+      }
+      if (text.includes('शक्ति') || text.includes('ऊर्जा') || lower.includes('urja') || lower.includes('p =') || lower.includes('power')) {
+        addRealEquation("P = V · I = I²·R", "विद्युत शक्ति = विभवांतर × धारा", timeStr);
       }
     }
     // 3. English Speech Processing
@@ -854,22 +960,54 @@ export default function TeacherDashboard() {
         {/* Global Controls & Mode Switch */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           
-          {/* MULTILINGUAL LANGUAGE SELECTOR (English default, Bengali, Hindi switchable) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.3)', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
-            <Globe size={15} color="var(--primary-color)" />
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Language:</span>
-            <select
-              value={selectedLanguage}
-              onChange={e => setSelectedLanguage(e.target.value)}
-              className="capture-select"
-              style={{ fontSize: '0.82rem', padding: '4px 8px', background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}
+          {/* MULTILINGUAL LANGUAGE SELECTOR & 1-CLICK ACOUSTIC MODEL SWITCH */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,0,0,0.35)', padding: '4px 8px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.12)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '0 4px', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600 }}>
+              <Globe size={14} color="var(--primary-color)" />
+              <span>Voice:</span>
+            </div>
+
+            <button
+              onClick={() => setSelectedLanguage('en-IN')}
+              style={{
+                background: selectedLanguage === 'en-IN' ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
+                border: `1px solid ${selectedLanguage === 'en-IN' ? 'var(--primary-color)' : 'transparent'}`,
+                color: selectedLanguage === 'en-IN' ? '#ffffff' : 'var(--text-muted)',
+                padding: '4px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s ease'
+              }}
+              title="Auto Detect: Indian English / Hinglish / Banglish"
             >
-              {languageOptions.map(opt => (
-                <option key={opt.code} value={opt.code} style={{ background: '#0f172a', color: '#fff' }}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+              <span>🌐 Auto / Hinglish</span>
+            </button>
+
+            <button
+              onClick={() => setSelectedLanguage('bn-IN')}
+              style={{
+                background: selectedLanguage === 'bn-IN' ? 'rgba(16, 185, 129, 0.25)' : 'transparent',
+                border: `1px solid ${selectedLanguage === 'bn-IN' ? '#10b981' : 'transparent'}`,
+                color: selectedLanguage === 'bn-IN' ? '#34d399' : 'var(--text-muted)',
+                padding: '4px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s ease'
+              }}
+              title="Dedicated Bengali Speech Recognition (বাংলা)"
+            >
+              <span>🇧🇩 বাংলা (bn-IN)</span>
+            </button>
+
+            <button
+              onClick={() => setSelectedLanguage('hi-IN')}
+              style={{
+                background: selectedLanguage === 'hi-IN' ? 'rgba(245, 158, 11, 0.25)' : 'transparent',
+                border: `1px solid ${selectedLanguage === 'hi-IN' ? '#f59e0b' : 'transparent'}`,
+                color: selectedLanguage === 'hi-IN' ? '#fbbf24' : 'var(--text-muted)',
+                padding: '4px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s ease'
+              }}
+              title="Dedicated Hindi Speech Recognition (हिन्दी)"
+            >
+              <span>🇮🇳 हिन्दी (hi-IN)</span>
+            </button>
           </div>
 
           {/* DEMO SIMULATION MODE TOGGLE (OFF BY DEFAULT) */}
@@ -1323,6 +1461,21 @@ export default function TeacherDashboard() {
                       </span>
                       <span style={{ fontSize: '0.95rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
                         {line.text}
+                        {line.gloss && (
+                          <span style={{
+                            marginLeft: '8px',
+                            fontSize: '0.84rem',
+                            fontWeight: 600,
+                            letterSpacing: '0.02em',
+                            color: line.lang === 'bn-IN' ? '#34d399' : '#fbbf24',
+                            background: line.lang === 'bn-IN' ? 'rgba(16, 185, 129, 0.14)' : 'rgba(245, 158, 11, 0.14)',
+                            padding: '2px 8px',
+                            borderRadius: '5px',
+                            border: `1px solid ${line.lang === 'bn-IN' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`
+                          }}>
+                            [{line.gloss}]
+                          </span>
+                        )}
                       </span>
                     </div>
                   </motion.div>

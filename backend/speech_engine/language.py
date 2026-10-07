@@ -25,19 +25,42 @@ LAT_REGEX = re.compile(r"[a-zA-Z]")          # Latin (English / Romanized)
 # High-frequency Romanized Indic stopwords for detecting Hinglish / Banglish
 # when spoken words are transcribed in Latin script or mixed with English terms.
 HINGLISH_TOKENS: Set[str] = {
-    "ab", "hum", "ham", "ke", "ko", "ki", "ka", "karenge", "karna", "baad",
-    "mein", "aur", "ye", "yeh", "woh", "voh", "hota", "hoti", "hote", "hai",
-    "hain", "kya", "toh", "to", "lekin", "samajh", "dekh", "dekho", "karte",
-    "kisi", "iska", "uski", "unka", "hoga", "hogi", "bol", "raha", "rahe",
-    "padhenge", "padhna", "calculate", "equation", "formula", "pehle", "phir",
+    "ab", "hum", "ham", "hamara", "hamari", "ke", "ko", "ki", "ka", "karenge",
+    "karna", "baad", "mein", "aur", "ye", "yeh", "woh", "wo", "voh", "hota",
+    "hoti", "hote", "hai", "hain", "kya", "toh", "to", "lekin", "magar", "samajh",
+    "samjhe", "samjho", "dekh", "dekho", "dekhiye", "karte", "karti", "kisi",
+    "iska", "uski", "unka", "iske", "uske", "unke", "hoga", "hogi", "bol", "bolo",
+    "batao", "bataiye", "raha", "rahe", "rahi", "padhenge", "padhna", "padho",
+    "pehle", "phir", "mera", "meri", "mere", "aap", "aapka", "aapki", "tum",
+    "tumhara", "tumhari", "kaise", "kyun", "kaha", "kahan", "kab", "theek",
+    "accha", "dhyan", "niyam", "dhara", "vidyut", "barabar", "chalo", "sikho",
+    "seekhenge", "bhai", "bhaiya", "suno", "sun", "dekhte", "calculate", "equation",
+    "formula",
 }
 
 BANGLISH_TOKENS: Set[str] = {
-    "ekhane", "amra", "aamra", "dekhchi", "dekhbo", "hobe", "holo", "kore",
-    "kora", "ei", "eta", "sheta", "seta", "kintu", "ar", "aar", "ebong",
-    "ache", "achhe", "chilo", "bujhte", "poriborton", "shob", "sob", "korbo",
-    "dekhun", "dekhte", "te", "er", "take", "theke", "diye", "jabe", "jaay",
+    "amar", "aamar", "amra", "aamra", "tomar", "tumi", "apni", "apnar", "naam",
+    "nam", "ekhane", "okhane", "kothay", "kobe", "ki", "kintu", "ebong", "ar",
+    "aar", "hobe", "holo", "hoy", "ache", "achhe", "chilo", "kore", "kora",
+    "korbo", "korchi", "korun", "dekhchi", "dekhbo", "dekhun", "dekhte", "bujhte",
+    "bujhecho", "shob", "sob", "shuru", "shesh", "sutro", "sutra", "shobai",
+    "bhalo", "thik", "bolun", "bolchi", "bolte", "bolbo", "bolo", "eta",
+    "sheta", "seta", "ei", "oi", "te", "er", "take", "theke", "diye", "jabe",
+    "jaay", "porbo", "porashona", "torit", "probaho", "rodh", "bibhob", "khub",
+    "keno", "kemon", "acho", "achhen", "dada", "didi", "mone", "rakho", "poriborton",
 }
+
+INDIC_PHRASES_BN = [
+    "amar naam", "aamar naam", "kemon acho", "kemon achen", "bhalo acho",
+    "ei sutro", "ei sutra", "shuru korbo", "dekhun ekhane", "dekhte pachho",
+    "bujhte parche", "bujhe gecho", "mone rakhben", "ki bolcho", "ki bolchen",
+]
+
+INDIC_PHRASES_HI = [
+    "bol do", "mera naam", "meri baat", "kya bol", "kaise ho", "kaise hain",
+    "samajh aaya", "samajh gaye", "ye niyam", "yeh sutra", "padhenge aaj",
+    "dekho yahan", "dhyan se", "sun lo", "bata do", "chalo shuru",
+]
 
 VALID_LANGUAGES: Set[str] = {"en", "hi", "bn"}
 
@@ -81,18 +104,35 @@ def detect_romanized_indic_tokens(text: str) -> tuple[bool, bool]:
     Returns:
         tuple (has_hinglish: bool, has_banglish: bool)
     """
+    lower_text = text.lower()
+
+    # 1. High-confidence phrase matching
+    has_bn_phrase = any(phrase in lower_text for phrase in INDIC_PHRASES_BN)
+    has_hi_phrase = any(phrase in lower_text for phrase in INDIC_PHRASES_HI)
+
     words = {w.lower() for w in re.findall(r"\b[a-zA-Z]+\b", text)}
-    if not words:
+    if not words and not (has_bn_phrase or has_hi_phrase):
         return False, False
 
     hinglish_matches = words.intersection(HINGLISH_TOKENS)
     banglish_matches = words.intersection(BANGLISH_TOKENS)
 
     # Require at least 2 distinct transliterated tokens to minimize false positives,
-    # or 1 token if total words is small (<= 5).
+    # or 1 token if total words is small (<= 5) or if high-confidence phrase matched.
     threshold = 1 if len(words) <= 5 else 2
-    has_hinglish = len(hinglish_matches) >= threshold
-    has_banglish = len(banglish_matches) >= threshold
+    has_hinglish = has_hi_phrase or len(hinglish_matches) >= threshold
+    has_banglish = has_bn_phrase or len(banglish_matches) >= threshold
+
+    # Disambiguate if both triggered
+    if has_hinglish and has_banglish:
+        if has_bn_phrase and not has_hi_phrase:
+            has_hinglish = False
+        elif has_hi_phrase and not has_bn_phrase:
+            has_banglish = False
+        elif len(banglish_matches) > len(hinglish_matches):
+            has_hinglish = False
+        elif len(hinglish_matches) > len(banglish_matches):
+            has_banglish = False
 
     return has_hinglish, has_banglish
 
