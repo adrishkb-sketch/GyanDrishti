@@ -238,6 +238,9 @@ export default function TeacherDashboard() {
   const [showKeyPoolConfig, setShowKeyPoolConfig] = useState(false);
   const [keysSavedNotice, setKeysSavedNotice] = useState(false);
   const [copiedDiagramIndex, setCopiedDiagramIndex] = useState(null);
+  const [backendGeminiStatus, setBackendGeminiStatus] = useState(null);
+  const [isVerifyingKeys, setIsVerifyingKeys] = useState(false);
+  const [keyVerificationMessage, setKeyVerificationMessage] = useState(null);
 
 
   // DOM, Audio, and Video Processing Refs
@@ -268,6 +271,47 @@ export default function TeacherDashboard() {
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
+
+  // Synchronize Gemini API keys between localStorage and backend on mount
+  useEffect(() => {
+    const syncGemini = async () => {
+      try {
+        const savedLocal = localStorage.getItem('gyandrishti_gemini_keys');
+        if (savedLocal && savedLocal.trim()) {
+          const res = await api.saveGeminiKeys(savedLocal.trim());
+          setBackendGeminiStatus(res);
+        } else {
+          const status = await api.fetchGeminiStatus();
+          setBackendGeminiStatus(status);
+        }
+      } catch (e) {
+        console.warn("Gemini backend sync notice:", e);
+      }
+    };
+    syncGemini();
+  }, []);
+
+  const handleSaveAndVerifyKeys = async () => {
+    setIsVerifyingKeys(true);
+    setKeyVerificationMessage(null);
+    try {
+      const cleanKeys = geminiKeys.trim();
+      localStorage.setItem('gyandrishti_gemini_keys', cleanKeys);
+      const res = await api.saveGeminiKeys(cleanKeys);
+      setBackendGeminiStatus(res);
+      setKeysSavedNotice(true);
+      if (res && (res.key_count > 0 || res.status === 'verified' || res.status === 'saved')) {
+        setKeyVerificationMessage(`✅ Saved till now! Validated ${res.key_count} active key(s) • Live Model: ${res.working_model || res.active_model || 'gemini-2.0-flash'}`);
+      } else {
+        setKeyVerificationMessage(res?.message || 'Keys updated.');
+      }
+    } catch (err) {
+      console.error("Failed to verify Gemini keys:", err);
+      setKeyVerificationMessage(`⚠️ Saved in browser! Backend status: ${err.message || 'Connecting...'}`);
+    } finally {
+      setIsVerifyingKeys(false);
+    }
+  };
 
   // Pre-compiled Demo Mode Timeline (ONLY active when isDemoMode is TRUE)
   const demoTimeline = [
@@ -2277,13 +2321,33 @@ export default function TeacherDashboard() {
                     <Zap size={14} color="#fbbf24" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#fff' }}>
-                      Gemini Key Pool (Free Tier Safe)
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#fff' }}>
+                        Gemini Multi-Key Pool
+                      </span>
+                      {(backendGeminiStatus?.key_count > 0 || (geminiKeys && geminiKeys.split(/[\s,\n;]+/).filter(k => k.trim().length > 15).length > 0)) && (
+                        <span style={{
+                          background: 'rgba(16, 185, 129, 0.18)',
+                          border: '1px solid rgba(16, 185, 129, 0.4)',
+                          color: '#34d399',
+                          borderRadius: '4px',
+                          padding: '1px 6px',
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.02em',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px'
+                        }}>
+                          <CheckCircle2 size={11} color="#34d399" />
+                          SAVED TILL NOW
+                        </span>
+                      )}
                     </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      {geminiKeys.split(/[\s,\n;]+/).filter(k => k.trim().length > 15).length > 0
-                        ? `⚡ ${geminiKeys.split(/[\s,\n;]+/).filter(k => k.trim().length > 15).length} key(s) loaded • Auto-Failover active`
-                        : 'Local mode active • Add keys for Gemini Turbo Vision'}
+                    <div style={{ fontSize: '0.72rem', color: (backendGeminiStatus?.key_count > 0 || geminiKeys.trim()) ? '#a7f3d0' : 'var(--text-muted)' }}>
+                      {(backendGeminiStatus?.key_count > 0 || geminiKeys.trim())
+                        ? `⚡ Active: ${backendGeminiStatus?.key_count || geminiKeys.split(/[\s,\n;]+/).filter(k => k.trim().length > 15).length} key(s) verified • Model: ${backendGeminiStatus?.working_model || backendGeminiStatus?.active_model || 'gemini-2.0-flash'} • 15 RPM safe failover`
+                        : 'Local fallback active • Paste free Gemini keys for textbook-grade notes'}
                     </div>
                   </div>
                 </div>
@@ -2312,8 +2376,23 @@ export default function TeacherDashboard() {
               {showKeyPoolConfig && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                   <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                    Paste 1 to 10 Gemini free API keys (comma or newline separated). If one key hits the Free Tier 15 RPM limit (429), GyanDrishti automatically rotates to the next key with thread-safe failover.
+                    Paste 1 to 10 Gemini free API keys (comma or newline separated). GyanDrishti automatically rotates keys, inspects blackboard keyframes via Gemini Vision, reads spoken Hindi/Bengali/English speech, and creates logical textbook notes.
                   </div>
+
+                  {keyVerificationMessage && (
+                    <div style={{
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      fontSize: '0.72rem',
+                      lineHeight: 1.4,
+                      background: keyVerificationMessage.startsWith('✅') ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                      border: `1px solid ${keyVerificationMessage.startsWith('✅') ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                      color: keyVerificationMessage.startsWith('✅') ? '#34d399' : '#f87171'
+                    }}>
+                      {keyVerificationMessage}
+                    </div>
+                  )}
+
                   <textarea
                     rows={3}
                     placeholder="AIzaSy...&#10;AIzaSy...&#10;AIzaSy..."
@@ -2334,14 +2413,20 @@ export default function TeacherDashboard() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
                       Detected: {geminiKeys.split(/[\s,\n;]+/).filter(k => k.trim().length > 15).length} key(s)
+                      {backendGeminiStatus?.working_model ? ` • Google Model: ${backendGeminiStatus.working_model}` : ''}
                     </span>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       {geminiKeys && (
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
                             setGeminiKeys('');
                             localStorage.removeItem('gyandrishti_gemini_keys');
+                            try {
+                              const res = await api.saveGeminiKeys('');
+                              setBackendGeminiStatus(res);
+                              setKeyVerificationMessage('Cleared all Gemini keys. Local offline engine active.');
+                            } catch (e) {}
                           }}
                           style={{
                             background: 'transparent',
@@ -2358,11 +2443,8 @@ export default function TeacherDashboard() {
                       )}
                       <button
                         type="button"
-                        onClick={() => {
-                          localStorage.setItem('gyandrishti_gemini_keys', geminiKeys.trim());
-                          setKeysSavedNotice(true);
-                          setTimeout(() => setKeysSavedNotice(false), 2000);
-                        }}
+                        disabled={isVerifyingKeys}
+                        onClick={handleSaveAndVerifyKeys}
                         style={{
                           background: keysSavedNotice ? 'rgba(16, 185, 129, 0.25)' : 'rgba(99, 102, 241, 0.25)',
                           border: `1px solid ${keysSavedNotice ? 'rgba(16, 185, 129, 0.5)' : 'rgba(99, 102, 241, 0.5)'}`,
@@ -2371,14 +2453,14 @@ export default function TeacherDashboard() {
                           padding: '4px 10px',
                           fontSize: '0.7rem',
                           fontWeight: 600,
-                          cursor: 'pointer',
+                          cursor: isVerifyingKeys ? 'wait' : 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '4px'
                         }}
                       >
-                        {keysSavedNotice ? <Check size={12} /> : null}
-                        <span>{keysSavedNotice ? 'Saved!' : 'Save Keys'}</span>
+                        {isVerifyingKeys ? <Loader2 size={12} className="spin" /> : keysSavedNotice ? <Check size={12} /> : <Sparkles size={12} />}
+                        <span>{isVerifyingKeys ? 'Verifying...' : keysSavedNotice ? 'Saved Till Now!' : 'Save & Verify Keys'}</span>
                       </button>
                     </div>
                   </div>

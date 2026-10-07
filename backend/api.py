@@ -414,6 +414,32 @@ async def upload_lecture_video(
         raise HTTPException(status_code=500, detail=f"Failed to process video: {str(e)}")
 
 
+class GeminiKeysRequest(BaseModel):
+    keys: str
+
+
+@app.get("/api/gemini/status")
+async def get_gemini_status():
+    from gemini_engine import gemini_pool
+    stats = gemini_pool.get_stats()
+    return {
+        "status": "ok",
+        "has_keys": gemini_pool.has_keys(),
+        "key_count": gemini_pool.get_key_count(),
+        "active_keys": stats.get("active_keys", 0),
+        "working_model": gemini_pool.working_model or "auto-detect",
+        "keys_preview": [f"...{k[-6:]}" if len(k) >= 6 else "***" for k in gemini_pool._keys]
+    }
+
+
+@app.post("/api/gemini/keys")
+async def save_gemini_keys_endpoint(req: GeminiKeysRequest):
+    from gemini_engine import verify_and_configure_keys
+    raw_keys = [k.strip() for k in re.split(r'[,;\n\r\s]+', req.keys) if k.strip()]
+    result = await asyncio.to_thread(verify_and_configure_keys, raw_keys)
+    return result
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

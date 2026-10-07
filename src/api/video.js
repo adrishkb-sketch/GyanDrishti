@@ -78,3 +78,19 @@ export async function uploadLectureVideo(formData) {
   return res.json();
 }
 
+export async function fetchGeminiStatus() {
+  const res = await fetch('http://localhost:8000/api/gemini/status');
+  if (!res.ok) throw new Error('Failed to fetch Gemini status');
+  return res.json();
+}
+
+export async function saveGeminiKeys(keys) {
+  const res = await fetch('http://localhost:8000/api/gemini/keys', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keys })
+  });
+  if (!res.ok) throw new Error('Failed to save and verify Gemini keys');
+  return res.json();
+}
+
