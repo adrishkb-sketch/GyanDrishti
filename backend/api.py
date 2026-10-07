@@ -1,11 +1,16 @@
 import asyncio
+import logging
+import os
+import shutil
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from video_engine.capture.camera import CameraCapture, list_cameras
@@ -27,6 +32,9 @@ from retrieval.retriever import SemanticLectureRetriever
 from retrieval.schemas import RetrievalFilter
 from understanding_engine.analyzer import LectureUnderstandingEngine
 from understanding_engine.llm import OllamaProvider, MockLLMProvider
+from video_processor import process_uploaded_lecture_video
+
+logger = logging.getLogger("gyandrishti.api")
 
 app = FastAPI(title="GyanDrishti API")
 
@@ -37,6 +45,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Ensure keyframes and upload directories exist and mount static route
+keyframes_dir = Path("video_engine/recordings/keyframes")
+keyframes_dir.mkdir(parents=True, exist_ok=True)
+uploads_dir = Path("video_engine/recordings/uploads")
+uploads_dir.mkdir(parents=True, exist_ok=True)
+
+app.mount("/api/video/keyframes", StaticFiles(directory=str(keyframes_dir)), name="keyframes")
+
 
 class SessionManager:
     def __init__(self):
@@ -342,6 +359,43 @@ def generate_ai_notes(req: GenerateNotesRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate notes: {str(e)}")
 
+
+@app.post("/api/video/upload")
+async def upload_lecture_video(
+    file: UploadFile = File(...),
+    title: Optional[str] = Form(None),
+    subject: Optional[str] = Form("Classroom Lecture"),
+):
+    """Processes an uploaded video file:
+    1. Extracts audio & runs multilingual Whisper transcription (EN, HI, BN).
+    2. Runs frame-by-frame chalkboard change detection & RapidOCR equation/text recognition.
+    3. Fuses speech + visual events and synthesizes notes with local Llama 3.2.
+    4. Saves canonical LectureMemory & indexes into vector retriever.
+    """
+    try:
+        session_id = f"upload_{int(time.time())}"
+        ext = Path(file.filename or "uploaded.mp4").suffix or ".mp4"
+        saved_video_path = uploads_dir / f"{session_id}{ext}"
+
+        with open(saved_video_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        lecture_title = title.strip() if title and title.strip() else (file.filename or "Recorded Lecture").rsplit(".", 1)[0]
+
+        result = await asyncio.to_thread(
+            process_uploaded_lecture_video,
+            video_path=saved_video_path,
+            title=lecture_title,
+            session_id=session_id,
+            subject=subject or "Classroom Lecture"
+        )
+        return result
+    except Exception as e:
+        logger.exception(f"Upload processing failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process video: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

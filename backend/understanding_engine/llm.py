@@ -123,6 +123,8 @@ class OllamaProvider(BaseLLMProvider):
             "stream": False,
             "options": {
                 "temperature": temperature,
+                "num_predict": 1024,
+                "num_ctx": 4096,
             },
             "format": "json",  # Instruct Ollama to output valid JSON
         }

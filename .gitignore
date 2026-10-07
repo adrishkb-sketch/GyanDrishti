@@ -22,3 +22,16 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python & Data Artifacts
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+data/
+*.wav
+video_engine/recordings/uploads/
+video_engine/recordings/keyframes/
+backend/video_engine/recordings/uploads/
+backend/video_engine/recordings/keyframes/
+

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -9,9 +9,40 @@ import { mockLectureMemory } from '../mocks/lectureMemory';
 
 export default function LectureViewer() {
   const { lectureId } = useParams();
-  // In a real implementation, we would fetch the lecture by ID here.
-  // For the prototype, we use the mock data.
-  const lecture = mockLectureMemory;
+  const [lecture, setLecture] = useState(mockLectureMemory);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!lectureId || lectureId === 'lecture_demo_20261006_01') {
+      setLecture(mockLectureMemory);
+      return;
+    }
+    setIsLoading(true);
+    fetch(`http://localhost:8000/api/lectures/${lectureId}`)
+      .then(res => {
+        if (!res.ok) throw new Error('Not found');
+        return res.json();
+      })
+      .then(data => {
+        // Merge with defaults to prevent any undefined rendering issues
+        setLecture({
+          ...mockLectureMemory,
+          ...data,
+          timeline_events: data.timeline_events || [],
+          concepts: data.concepts || [],
+          definitions: data.definitions || [],
+          equations: data.equations || [],
+          important_points: data.important_points || [],
+          revision_questions: data.revision_questions || [],
+        });
+      })
+      .catch(err => {
+        console.warn('Could not load lecture from backend, falling back to mock:', err);
+        setLecture(mockLectureMemory);
+      })
+      .finally(() => setIsLoading(false));
+  }, [lectureId]);
+
 
   const [activeQuestion, setActiveQuestion] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');

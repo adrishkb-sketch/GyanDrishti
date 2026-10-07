@@ -65,3 +65,16 @@ export async function generateAINotes(payload) {
   if (!res.ok) throw new Error('Failed to generate AI notes');
   return res.json();
 }
+
+export async function uploadLectureVideo(formData) {
+  const res = await fetch(`${API_URL}/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Failed to upload and process video');
+  }
+  return res.json();
+}
+
