@@ -2,7 +2,7 @@ import asyncio
 import threading
 import time
 from datetime import datetime
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,6 +22,7 @@ from lecture_memory.storage import (
     CorruptMemoryError,
     InvalidSessionIdError,
 )
+from lecture_memory.schemas import LectureMemory
 from retrieval.retriever import SemanticLectureRetriever
 from retrieval.schemas import RetrievalFilter
 
@@ -207,6 +208,20 @@ memory_storage = LectureMemoryStorage()
 def list_lectures():
     """Returns index of all locally persisted lecture memories."""
     return {"lectures": memory_storage.list_lectures()}
+
+@app.post("/api/lectures")
+def save_lecture_memory(data: Dict[str, Any]):
+    """Persists a new lecture memory and updates the local semantic retrieval index."""
+    try:
+        memory = LectureMemory.model_validate(data) if hasattr(LectureMemory, "model_validate") else LectureMemory.parse_obj(data)
+        memory_storage.save(memory)
+        try:
+            retriever.index_lecture(memory)
+        except Exception:
+            pass
+        return {"status": "saved", "session_id": memory.session_id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/lectures/{session_id}")
 def get_lecture_memory(session_id: str):

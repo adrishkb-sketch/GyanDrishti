@@ -28,10 +28,15 @@ class CameraCapture(BaseCapture):
 
 def list_cameras():
     cams = []
-    # Test first 5 indices
-    for i in range(5):
+    # Test first 2 indices (primary camera and potential external)
+    for i in range(2):
         cap = cv2.VideoCapture(i)
         if cap.isOpened():
             cams.append(i)
             cap.release()
+        else:
+            break
+    if not cams:
+        # Fallback to index 0
+        cams = [0]
     return cams
