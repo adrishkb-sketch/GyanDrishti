@@ -233,6 +233,10 @@ class LectureMemory(BaseModel):
         default_factory=list,
         description="Candidate revision and self-assessment questions",
     )
+    diagrams: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Visual diagrams (circuits, charts, graphs) extracted from chalkboard or synthesized for pedagogical notes",
+    )
     metadata: LectureMetadata = Field(
         default_factory=LectureMetadata,
         description="Ingestion session and language metadata",
@@ -339,4 +343,14 @@ class LectureMemory(BaseModel):
                 }
                 for q in self.revision_questions
             ],
+            "diagrams": [
+                {
+                    "title": d.get("title") or d.get("name", "Diagram"),
+                    "description": d.get("description", ""),
+                    "diagram_type": d.get("diagram_type", "diagram"),
+                    "mermaid_code": d.get("mermaid_code", ""),
+                }
+                for d in (self.diagrams or [])
+            ],
         }
+

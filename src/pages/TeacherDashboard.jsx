@@ -6,7 +6,8 @@ import {
   HardDrive, AlertCircle, AlertTriangle, CheckCircle2, Eye, EyeOff,
   User, CircuitBoard, Sparkles, Download, FileText, RefreshCw, Volume2,
   Layers, Maximize2, Camera, CameraOff, PenTool, Check, Globe, ToggleLeft, ToggleRight,
-  Upload, FileVideo, Cpu, ArrowRight, BookOpen, Clock, Hash, ChevronRight, CheckCircle, FileCheck, Loader2, ArrowUpRight, Copy, ExternalLink, X, HelpCircle
+  Upload, FileVideo, Cpu, ArrowRight, BookOpen, Clock, Hash, ChevronRight, CheckCircle, FileCheck, Loader2, ArrowUpRight, Copy, ExternalLink, X, HelpCircle,
+  Zap, Key
 } from 'lucide-react';
 import * as api from '../api/video';
 
@@ -229,6 +230,14 @@ export default function TeacherDashboard() {
   const [selectedKeyframe, setSelectedKeyframe] = useState(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Gemini API Key Pool State (Multi-Key Failover)
+  const [geminiKeys, setGeminiKeys] = useState(() => {
+    return localStorage.getItem('gyandrishti_gemini_keys') || '';
+  });
+  const [showKeyPoolConfig, setShowKeyPoolConfig] = useState(false);
+  const [keysSavedNotice, setKeysSavedNotice] = useState(false);
+  const [copiedDiagramIndex, setCopiedDiagramIndex] = useState(null);
 
 
   // DOM, Audio, and Video Processing Refs
@@ -997,23 +1006,23 @@ export default function TeacherDashboard() {
 
   const UPLOAD_PIPELINE_STAGES = [
     {
-      title: "Audio Extraction & Whisper ASR",
+      title: "Audio Extraction & Multilingual Whisper ASR",
       desc: "Extracts 16kHz mono audio via FFmpeg and transcribes speech with Faster-Whisper (Multilingual: English, Hindi, Bengali).",
       icon: Mic
     },
     {
-      title: "Chalkboard Sampling & RapidOCR",
-      desc: "Detects scene changes with OpenCV, captures keyframes, and extracts math formulas & text.",
+      title: "Chalkboard Sampling & Gemini Vision",
+      desc: "Detects scene changes with OpenCV, captures keyframes, and uses Gemini Vision to detect teacher, chalkboard, math & boardwork.",
       icon: CircuitBoard
     },
     {
       title: "Multimodal Temporal Alignment",
-      desc: "Aligns spoken timestamps with visual boardwork events to establish verified provenance.",
+      desc: "Gemini correlates spoken timestamps with visual chalkboard events to establish verified provenance.",
       icon: Layers
     },
     {
-      title: "AI Notes Synthesis (Meta Llama 3.2)",
-      desc: "Runs local Meta Llama 3.2 (3B) on local GPU to generate concepts, formulas, definitions, and questions.",
+      title: "Cooperative AI Notes & Diagrams",
+      desc: "Synthesizes structured notes, exam practice questions, and Mermaid schematics using Gemini and Meta Llama 3.2.",
       icon: Sparkles
     },
     {
@@ -1084,6 +1093,9 @@ export default function TeacherDashboard() {
       if (uploadSubject.trim()) {
         formData.append('subject', uploadSubject.trim());
       }
+      if (geminiKeys.trim()) {
+        formData.append('gemini_api_keys', geminiKeys.trim());
+      }
 
       const res = await api.uploadLectureVideo(formData);
       clearTimeout(t1);
@@ -1141,6 +1153,17 @@ export default function TeacherDashboard() {
         md += `- ${p.point}\n`;
       });
       md += `\n`;
+    }
+
+    if (data.diagrams && data.diagrams.length > 0) {
+      md += `## 📐 Visual Diagrams & Schematics\n\n`;
+      data.diagrams.forEach((d, idx) => {
+        md += `### ${idx + 1}. ${d.title || 'Pedagogical Diagram'}\n`;
+        if (d.description) md += `${d.description}\n\n`;
+        if (d.mermaid_code) {
+          md += `\`\`\`mermaid\n${d.mermaid_code}\n\`\`\`\n\n`;
+        }
+      });
     }
 
     if (data.revision_questions && data.revision_questions.length > 0) {
@@ -2234,6 +2257,135 @@ export default function TeacherDashboard() {
               </div>
             </div>
 
+            {/* Gemini Multi-Key Pool Configuration */}
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '10px',
+              padding: '12px 14px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: 24, height: 24, borderRadius: '6px',
+                    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.3), rgba(234, 88, 12, 0.3))',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}>
+                    <Zap size={14} color="#fbbf24" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#fff' }}>
+                      Gemini Key Pool (Free Tier Safe)
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      {geminiKeys.split(/[\s,\n;]+/).filter(k => k.trim().length > 15).length > 0
+                        ? `⚡ ${geminiKeys.split(/[\s,\n;]+/).filter(k => k.trim().length > 15).length} key(s) loaded • Auto-Failover active`
+                        : 'Local mode active • Add keys for Gemini Turbo Vision'}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowKeyPoolConfig(!showKeyPoolConfig)}
+                  style={{
+                    background: showKeyPoolConfig ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    color: 'var(--text-secondary)',
+                    borderRadius: '6px',
+                    padding: '4px 8px',
+                    fontSize: '0.72rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <Key size={12} />
+                  <span>{showKeyPoolConfig ? 'Close' : 'Configure'}</span>
+                </button>
+              </div>
+
+              {showKeyPoolConfig && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                    Paste 1 to 10 Gemini free API keys (comma or newline separated). If one key hits the Free Tier 15 RPM limit (429), GyanDrishti automatically rotates to the next key with thread-safe failover.
+                  </div>
+                  <textarea
+                    rows={3}
+                    placeholder="AIzaSy...&#10;AIzaSy...&#10;AIzaSy..."
+                    value={geminiKeys}
+                    onChange={(e) => setGeminiKeys(e.target.value)}
+                    style={{
+                      width: '100%',
+                      background: 'rgba(0,0,0,0.4)',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      borderRadius: '6px',
+                      padding: '8px 10px',
+                      color: '#fbbf24',
+                      fontSize: '0.78rem',
+                      fontFamily: 'var(--font-mono)',
+                      resize: 'vertical'
+                    }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                      Detected: {geminiKeys.split(/[\s,\n;]+/).filter(k => k.trim().length > 15).length} key(s)
+                    </span>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      {geminiKeys && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGeminiKeys('');
+                            localStorage.removeItem('gyandrishti_gemini_keys');
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            color: '#f87171',
+                            borderRadius: '5px',
+                            padding: '4px 8px',
+                            fontSize: '0.7rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Clear
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          localStorage.setItem('gyandrishti_gemini_keys', geminiKeys.trim());
+                          setKeysSavedNotice(true);
+                          setTimeout(() => setKeysSavedNotice(false), 2000);
+                        }}
+                        style={{
+                          background: keysSavedNotice ? 'rgba(16, 185, 129, 0.25)' : 'rgba(99, 102, 241, 0.25)',
+                          border: `1px solid ${keysSavedNotice ? 'rgba(16, 185, 129, 0.5)' : 'rgba(99, 102, 241, 0.5)'}`,
+                          color: keysSavedNotice ? '#34d399' : '#a5b4fc',
+                          borderRadius: '5px',
+                          padding: '4px 10px',
+                          fontSize: '0.7rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        {keysSavedNotice ? <Check size={12} /> : null}
+                        <span>{keysSavedNotice ? 'Saved!' : 'Save Keys'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Submit Action Button */}
             <button
               onClick={handleFileUploadSubmit}
@@ -2412,18 +2564,36 @@ export default function TeacherDashboard() {
               {/* Result Header Bar */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '1.25rem' }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', fontWeight: 700 }}>
                       INGESTION COMPLETE
                     </span>
                     <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
                       ID: {uploadResult.session_id}
                     </span>
+                    <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '4px', background: uploadResult.model_used?.includes('gemini') ? 'rgba(245, 158, 11, 0.15)' : 'rgba(99, 102, 241, 0.15)', color: uploadResult.model_used?.includes('gemini') ? '#fbbf24' : '#a5b4fc', fontWeight: 700, border: `1px solid ${uploadResult.model_used?.includes('gemini') ? 'rgba(245, 158, 11, 0.3)' : 'rgba(99, 102, 241, 0.3)'}` }}>
+                      {uploadResult.model_used?.includes('gemini') ? '⚡ Gemini 2.5 Flash + Llama 3.2' : uploadResult.model_used || 'Meta Llama 3.2'}
+                    </span>
+                    {uploadResult.teacher_present && (
+                      <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '4px', background: 'rgba(99, 102, 241, 0.15)', color: '#a5b4fc', fontWeight: 600, border: '1px solid rgba(99, 102, 241, 0.3)' }}>
+                        👨‍🏫 Teacher In View
+                      </span>
+                    )}
+                    {uploadResult.board_present && (
+                      <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', fontWeight: 600, border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                        📋 Chalkboard Active
+                      </span>
+                    )}
+                    {uploadResult.gemini_pool_status && (
+                      <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.05)', color: '#94a3b8', fontFamily: 'var(--font-mono)' }}>
+                        Pool: {uploadResult.gemini_pool_status.active_keys} key(s)
+                      </span>
+                    )}
                   </div>
                   <h2 style={{ fontSize: '1.35rem', fontWeight: 700, margin: 0, color: '#ffffff' }}>
                     {uploadResult.title || "Classroom Lecture"}
                   </h2>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px', fontSize: '0.8rem', color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <Clock size={13} /> {formatTime(uploadResult.duration || 0)}
                     </span>
@@ -2435,6 +2605,14 @@ export default function TeacherDashboard() {
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <Mic size={13} /> {uploadResult.speech_segments?.length || 0} Spoken Segments
                     </span>
+                    {uploadResult.diagrams && uploadResult.diagrams.length > 0 && (
+                      <>
+                        <span>•</span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#c4b5fd' }}>
+                          <Zap size={13} /> {uploadResult.diagrams.length} Visual Diagram(s)
+                        </span>
+                      </>
+                    )}
                     <span>•</span>
                     <span style={{ color: '#34d399', fontWeight: 600 }}>
                       {Math.round((uploadResult.grounding_score || 0.98) * 100)}% Grounded
@@ -2631,6 +2809,108 @@ export default function TeacherDashboard() {
                     </div>
                   )}
 
+                  {/* Visual Diagrams & Schematics */}
+                  {uploadResult.diagrams && uploadResult.diagrams.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Zap size={14} color="#a78bfa" /> Visual Diagrams & Schematics ({uploadResult.diagrams.length})
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '12px' }}>
+                        {uploadResult.diagrams.map((d, idx) => (
+                          <div key={idx} style={{ background: 'rgba(167, 139, 250, 0.05)', border: '1px solid rgba(167, 139, 250, 0.25)', borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <div>
+                                <div style={{ fontWeight: 600, fontSize: '0.92rem', color: '#fff' }}>
+                                  {d.title || `Diagram ${idx + 1}`}
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: '#c4b5fd', textTransform: 'uppercase', fontWeight: 700, marginTop: '2px' }}>
+                                  {d.diagram_type || 'concept_map'}
+                                </div>
+                              </div>
+                              {d.mermaid_code && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(d.mermaid_code);
+                                    setCopiedDiagramIndex(idx);
+                                    setTimeout(() => setCopiedDiagramIndex(null), 2000);
+                                  }}
+                                  style={{
+                                    background: 'rgba(255,255,255,0.08)',
+                                    border: '1px solid rgba(255,255,255,0.15)',
+                                    borderRadius: '6px',
+                                    color: copiedDiagramIndex === idx ? '#34d399' : '#e2e8f0',
+                                    padding: '4px 8px',
+                                    fontSize: '0.72rem',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                  title="Copy Mermaid.js diagram code"
+                                >
+                                  {copiedDiagramIndex === idx ? <Check size={12} /> : <Copy size={12} />}
+                                  <span>{copiedDiagramIndex === idx ? 'Copied' : 'Copy Code'}</span>
+                                </button>
+                              )}
+                            </div>
+                            {d.description && (
+                              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+                                {d.description}
+                              </div>
+                            )}
+                            {d.mermaid_code && (
+                              <div style={{ background: 'rgba(0,0,0,0.5)', borderRadius: '6px', padding: '10px', border: '1px solid rgba(255,255,255,0.06)', overflowX: 'auto' }}>
+                                <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginBottom: '4px', fontFamily: 'var(--font-mono)' }}>
+                                  MERMAID DIAGRAM SCHEMATIC:
+                                </div>
+                                <pre style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#93c5fd', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+                                  {d.mermaid_code}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Multimodal Temporal Insights */}
+                  {uploadResult.aligned_insights && uploadResult.aligned_insights.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#34d399', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Layers size={14} color="#34d399" /> Multimodal Boardwork & Speech Corroboration
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {uploadResult.aligned_insights.map((item, idx) => (
+                          <div key={idx} style={{ background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '8px', padding: '10px 12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: '#34d399', fontWeight: 700 }}>
+                                {formatTime(item.timestamp || 0)}
+                              </span>
+                              <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}>
+                                Aligned Event
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.82rem', color: '#fff', fontWeight: 500 }}>
+                              {item.pedagogical_event}
+                            </div>
+                            {item.spoken_anchor && (
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                                <em>Spoken:</em> "{item.spoken_anchor}"
+                              </div>
+                            )}
+                            {item.chalkboard_anchor && (
+                              <div style={{ fontSize: '0.75rem', color: '#818cf8', marginTop: '2px' }}>
+                                <em>Chalkboard:</em> "{item.chalkboard_anchor}"
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                 </div>
               )}
 
@@ -2638,7 +2918,7 @@ export default function TeacherDashboard() {
               {uploadResultTab === 'boardwork' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', maxHeight: 'calc(100vh - 280px)', paddingRight: '6px' }}>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    Extracted frame-by-frame using OpenCV change detection and analyzed with RapidOCR for handwritten chalkboard equations and notes. Click any image to view details.
+                    Extracted frame-by-frame using OpenCV change detection and analyzed with RapidOCR & Gemini Vision for chalkboard equations and notes. Click any image to view details.
                   </div>
 
                   {uploadResult.visual_events && uploadResult.visual_events.length > 0 ? (
@@ -2675,6 +2955,11 @@ export default function TeacherDashboard() {
                             {ve.event_type === 'equation' && (
                               <div style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(56, 189, 248, 0.85)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.68rem', color: '#000', fontWeight: 700 }}>
                                 FORMULA
+                              </div>
+                            )}
+                            {ve.gemini_enhanced && (
+                              <div style={{ position: 'absolute', bottom: '6px', right: '6px', background: 'rgba(167, 139, 250, 0.9)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem', color: '#000', fontWeight: 700 }}>
+                                GEMINI
                               </div>
                             )}
                           </div>

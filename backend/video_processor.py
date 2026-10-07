@@ -48,8 +48,16 @@ from lecture_memory.provenance import (
 )
 from lecture_memory.storage import LectureMemoryStorage
 from retrieval.retriever import SemanticLectureRetriever
+from gemini_engine import (
+    GeminiKeyPool,
+    gemini_pool,
+    analyze_chalkboard_frame_with_gemini,
+    align_multimodal_with_gemini,
+    synthesize_lecture_notes_with_gemini,
+)
 
 logger = logging.getLogger(__name__)
+
 
 
 def extract_audio_from_video(video_path: Path, output_wav: Path) -> bool:
@@ -70,6 +78,7 @@ def extract_audio_from_video(video_path: Path, output_wav: Path) -> bool:
         str(output_wav)
     ]
 
+    output_wav.parent.mkdir(parents=True, exist_ok=True)
     try:
         proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
         return output_wav.exists() and output_wav.stat().st_size > 44
@@ -238,23 +247,37 @@ def process_uploaded_lecture_video(
     video_path: Path,
     title: Optional[str] = None,
     session_id: Optional[str] = None,
-    subject: str = "Classroom Lecture"
+    subject: str = "Classroom Lecture",
+    gemini_api_keys: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    """Complete end-to-end ingestion pipeline for an uploaded video file.
+    """Complete multi-stage ingestion pipeline for an uploaded video file.
 
-    1. Extract audio & transcribe with Whisper (EN / HI / BN)
-    2. Extract keyframes & chalkboard OCR with RapidOCR
-    3. Multimodal alignment & AI Notes Synthesis with local Llama 3.2
-    4. Store canonical LectureMemory and return response
+    Workflow:
+    1. Audio extraction via FFmpeg & speech transcription (Whisper + Indic transliteration).
+    2. Video keyframe sampling via OpenCV change detection.
+    3. Chalkboard vision & object recognition via Gemini Vision (teacher detection, board presence, LaTeX equations & diagrams).
+    4. Multimodal temporal alignment fusing speech and chalkboard visual evidence.
+    5. Pedagogical lecture notes synthesis with Mermaid diagrams (Gemini 1.5 + local Llama 3.2 cooperation).
+    6. Canonical LectureMemory creation, persistence, and semantic retrieval indexing.
     """
     if not session_id:
         session_id = f"lecture_upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-    base_dir = Path("backend/video_engine/recordings")
+    # Load Gemini API keys into pool if provided
+    if gemini_api_keys:
+        gemini_pool.set_keys(gemini_api_keys)
+    use_gemini = gemini_pool.has_keys()
+
+    if Path("video_engine").exists():
+        base_dir = Path("video_engine/recordings")
+    elif Path("backend/video_engine").exists():
+        base_dir = Path("backend/video_engine/recordings")
+    else:
+        base_dir = Path("video_engine/recordings")
     keyframes_dir = base_dir / "keyframes" / session_id
     audio_wav = base_dir / "uploads" / f"{session_id}.wav"
 
-    # 1. Video Keyframes & OCR
+    # Step 1: Video Keyframes & Local OpenCV Sampling
     logger.info(f"Extracting keyframes and boardwork OCR from {video_path}...")
     visual_events, duration_sec = extract_boardwork_keyframes(
         video_path=video_path,
@@ -262,7 +285,7 @@ def process_uploaded_lecture_video(
         session_id=session_id
     )
 
-    # 2. Audio Extraction & Speech-to-Text
+    # Step 2: Audio Extraction & Speech-to-Text
     logger.info(f"Extracting audio track from {video_path}...")
     has_audio = extract_audio_from_video(video_path, audio_wav)
     speech_segments: List[Dict[str, Any]] = []
@@ -282,8 +305,86 @@ def process_uploaded_lecture_video(
             "languages": ["en"]
         }]
 
-    # 3. AI Pedagogical Notes Generation with Meta Llama 3.2 (via Ollama)
-    logger.info("Synthesizing structured lecture notes using local open-weight Llama 3.2...")
+    # Step 3: Deep Boardwork, Teacher & Diagram Recognition with Gemini Vision
+    gemini_diagrams: List[Dict[str, Any]] = []
+    gemini_equations: List[Dict[str, Any]] = []
+    teacher_present = False
+    board_present = True
+
+    if use_gemini:
+        logger.info(f"Gemini Vision analyzing chalkboard frames with pool of {gemini_pool.get_key_count()} key(s)...")
+        # Sample keyframes (limit to 5 to protect 15 RPM Free Tier rate limit)
+        sample_frames = visual_events[:5]
+        for ve in sample_frames:
+            frame_filename = ve.get("keyframe_id")
+            if not frame_filename:
+                continue
+            frame_path = keyframes_dir / frame_filename
+            if not frame_path.exists():
+                continue
+
+            try:
+                analysis = analyze_chalkboard_frame_with_gemini(
+                    image_path=frame_path,
+                    timestamp=float(ve.get("timestamp", 0.0)),
+                    key_pool=gemini_pool
+                )
+                if analysis.get("teacher_present"):
+                    teacher_present = True
+                if analysis.get("board_present") is not None:
+                    board_present = analysis.get("board_present")
+
+                if analysis.get("chalkboard_text"):
+                    extracted_lines = " • ".join(analysis["chalkboard_text"][:4])
+                    ve["content"] = f"{ve['content']} | {extracted_lines}" if "Chalkboard" in ve["content"] else extracted_lines
+                    ve["gemini_enhanced"] = True
+
+                for eq in analysis.get("equations", []):
+                    if eq.get("latex"):
+                        gemini_equations.append(eq)
+                        ve["event_type"] = "equation"
+                        ve["math_expression"] = eq["latex"]
+
+                for d in analysis.get("diagrams", []):
+                    if d.get("mermaid_code") or d.get("description"):
+                        gemini_diagrams.append(d)
+
+            except Exception as e:
+                logger.warning(f"Gemini frame analysis fallback on {frame_filename}: {e}")
+
+    # Step 4: Multimodal Temporal Alignment with Gemini
+    aligned_insights: List[Dict[str, Any]] = []
+    if use_gemini:
+        try:
+            logger.info("Aligning speech and chalkboard visual evidence with Gemini...")
+            align_res = align_multimodal_with_gemini(
+                speech_segments=speech_segments[:8],
+                visual_events=visual_events[:8],
+                lecture_title=title or "Classroom Lecture",
+                key_pool=gemini_pool
+            )
+            aligned_insights = align_res.get("aligned_timeline", [])
+        except Exception as e:
+            logger.warning(f"Gemini multimodal alignment notice: {e}")
+
+    # Step 5: Pedagogical Notes & Questions Synthesis with Diagrams
+    gemini_notes: Optional[Dict[str, Any]] = None
+    if use_gemini:
+        try:
+            logger.info("Synthesizing pedagogical notes and diagrams with Gemini...")
+            gemini_notes = synthesize_lecture_notes_with_gemini(
+                lecture_title=title or "Classroom Lecture",
+                subject=subject,
+                duration=duration_sec,
+                speech_segments=speech_segments,
+                visual_events=visual_events,
+                extracted_diagrams=gemini_diagrams,
+                key_pool=gemini_pool
+            )
+        except Exception as e:
+            logger.warning(f"Gemini notes synthesis notice: {e}")
+
+    # Cooperative: Also run local Llama 3.2 for validation
     ollama = OllamaProvider(model="llama3.2:3b")
     engine = LectureUnderstandingEngine(provider=ollama if ollama.is_available() else MockLLMProvider())
 
@@ -295,29 +396,51 @@ def process_uploaded_lecture_video(
         lecture_id=session_id
     )
 
-    lecture_title = title or understanding.topic or "Lecture Presentation"
+    lecture_title = title or (gemini_notes.get("topic") if gemini_notes else None) or understanding.topic or "Lecture Presentation"
 
     # 4. Construct Canonical LectureMemory Object with Valid Provenance
     mem_concepts: List[MemoryConcept] = []
-    for idx, c in enumerate(understanding.concepts, start=1):
-        c_start = float(c.timestamp_start or 0.0)
-        c_end = float(c.timestamp_end or (c_start + 15.0))
-        mem_concepts.append(
-            MemoryConcept(
-                id=f"c{idx}",
-                name=c.name,
-                explanation=c.explanation,
-                timestamp=c_start,
-                timestamp_start=c_start,
-                timestamp_end=c_end,
-                provenance=create_speech_provenance(
-                    start=c_start,
-                    end=c_end,
-                    text_snippet=c.explanation,
-                    source_id=f"speech_{idx}"
+    
+    # Priority: Gemini's rich pedagogical concepts if available, supplemented by Llama
+    if gemini_notes and gemini_notes.get("concepts"):
+        for idx, c in enumerate(gemini_notes["concepts"], start=1):
+            c_ts = float(c.get("timestamp", 0.0))
+            mem_concepts.append(
+                MemoryConcept(
+                    id=f"c{idx}",
+                    name=c.get("name", f"Concept {idx}"),
+                    explanation=c.get("explanation", ""),
+                    timestamp=c_ts,
+                    timestamp_start=c_ts,
+                    timestamp_end=c_ts + 15.0,
+                    provenance=create_derived_provenance(
+                        start=c_ts,
+                        end=c_ts + 15.0,
+                        evidence_snippet=c.get("explanation", "")
+                    )
                 )
             )
-        )
+    else:
+        for idx, c in enumerate(understanding.concepts, start=1):
+            c_start = float(c.timestamp_start or 0.0)
+            c_end = float(c.timestamp_end or (c_start + 15.0))
+            mem_concepts.append(
+                MemoryConcept(
+                    id=f"c{idx}",
+                    name=c.name,
+                    explanation=c.explanation,
+                    timestamp=c_start,
+                    timestamp_start=c_start,
+                    timestamp_end=c_end,
+                    provenance=create_speech_provenance(
+                        start=c_start,
+                        end=c_end,
+                        text_snippet=c.explanation,
+                        source_id=f"speech_{idx}"
+                    )
+                )
+            )
+
 
     if not mem_concepts:
         board_texts = [ve.get("content", "") for ve in visual_events if ve.get("content") and "Chalkboard" not in ve.get("content")]
@@ -345,41 +468,99 @@ def process_uploaded_lecture_video(
         )
 
     mem_definitions: List[MemoryDefinition] = []
-    for idx, d in enumerate(understanding.definitions, start=1):
-        d_ts = float(d.timestamp or 0.0)
-        mem_definitions.append(
-            MemoryDefinition(
-                term=d.term,
-                definition=d.definition,
-                timestamp=d_ts,
-                provenance=create_speech_provenance(
-                    start=d_ts,
-                    end=d_ts + 10.0,
-                    text_snippet=d.definition,
-                    source_id=f"speech_def_{idx}"
+    if gemini_notes and gemini_notes.get("definitions"):
+        for idx, d in enumerate(gemini_notes["definitions"], start=1):
+            d_ts = float(d.get("timestamp", 0.0))
+            mem_definitions.append(
+                MemoryDefinition(
+                    term=d.get("term", f"Term {idx}"),
+                    definition=d.get("definition", ""),
+                    timestamp=d_ts,
+                    provenance=create_derived_provenance(
+                        start=d_ts,
+                        end=d_ts + 10.0,
+                        evidence_snippet=d.get("definition", "")
+                    )
                 )
             )
-        )
+    else:
+        for idx, d in enumerate(understanding.definitions, start=1):
+            d_ts = float(d.timestamp or 0.0)
+            mem_definitions.append(
+                MemoryDefinition(
+                    term=d.term,
+                    definition=d.definition,
+                    timestamp=d_ts,
+                    provenance=create_speech_provenance(
+                        start=d_ts,
+                        end=d_ts + 10.0,
+                        text_snippet=d.definition,
+                        source_id=f"speech_def_{idx}"
+                    )
+                )
+            )
 
     mem_equations: List[MemoryEquation] = []
-    for idx, eq in enumerate(understanding.equations, start=1):
-        mem_equations.append(
-            MemoryEquation(
-                name=f"Equation {idx}",
-                representation=eq.latex or "I = V / R",
-                explanation=eq.explanation or "Mathematical relation extracted from lecture",
-                timestamp=0.0,
-                grounding_status="supported",
-                evidence_snippet=eq.latex,
-                provenance=create_derived_provenance(
-                    start=0.0,
-                    end=15.0,
-                    evidence_snippet=eq.latex or "Mathematical relation extracted from lecture"
+    # 1. Equations from Gemini notes
+    if gemini_notes and gemini_notes.get("equations"):
+        for idx, eq in enumerate(gemini_notes["equations"], start=1):
+            repr_latex = eq.get("latex") or eq.get("representation", "E = mc^2")
+            mem_equations.append(
+                MemoryEquation(
+                    name=eq.get("name", f"Equation {idx}"),
+                    representation=repr_latex,
+                    explanation=eq.get("explanation", "Mathematical derivation extracted via multimodal Gemini analysis"),
+                    timestamp=float(eq.get("timestamp", 0.0)),
+                    grounding_status="supported",
+                    evidence_snippet=repr_latex,
+                    provenance=create_derived_provenance(
+                        start=float(eq.get("timestamp", 0.0)),
+                        end=float(eq.get("timestamp", 0.0)) + 15.0,
+                        evidence_snippet=repr_latex
+                    )
                 )
             )
-        )
 
-    # Also include equations directly verified by OCR
+    # 2. Add Gemini Vision chalkboard equations if not duplicate
+    for idx, eq in enumerate(gemini_equations, start=len(mem_equations) + 1):
+        repr_latex = eq.get("latex", "")
+        if repr_latex and not any(e.representation == repr_latex for e in mem_equations):
+            mem_equations.append(
+                MemoryEquation(
+                    name=eq.get("name", f"Board Equation {idx}"),
+                    representation=repr_latex,
+                    explanation=eq.get("explanation", "Extracted directly from chalkboard keyframe by Gemini Vision"),
+                    timestamp=0.0,
+                    grounding_status="supported",
+                    evidence_snippet=repr_latex,
+                    provenance=create_derived_provenance(
+                        start=0.0,
+                        end=15.0,
+                        evidence_snippet=repr_latex
+                    )
+                )
+            )
+
+    # 3. Add Llama equations if not duplicate
+    for idx, eq in enumerate(understanding.equations, start=len(mem_equations) + 1):
+        if not any(e.representation == eq.latex for e in mem_equations):
+            mem_equations.append(
+                MemoryEquation(
+                    name=f"Equation {idx}",
+                    representation=eq.latex or "I = V / R",
+                    explanation=eq.explanation or "Mathematical relation extracted from lecture",
+                    timestamp=0.0,
+                    grounding_status="supported",
+                    evidence_snippet=eq.latex,
+                    provenance=create_derived_provenance(
+                        start=0.0,
+                        end=15.0,
+                        evidence_snippet=eq.latex or "Mathematical relation extracted from lecture"
+                    )
+                )
+            )
+
+    # 4. Also include equations directly verified by OCR
     for ve in visual_events:
         if ve.get("event_type") == "equation" and ve.get("math_expression"):
             expr = ve["math_expression"]
@@ -401,20 +582,35 @@ def process_uploaded_lecture_video(
                 )
 
     mem_important_points: List[MemoryImportantPoint] = []
-    for idx, p in enumerate(understanding.important_points, start=1):
-        pt_start = float(p.timestamp_start or 0.0)
-        mem_important_points.append(
-            MemoryImportantPoint(
-                point=p.point,
-                timestamp=pt_start,
-                importance=p.importance or "high",
-                provenance=create_derived_provenance(
-                    start=pt_start,
-                    end=pt_start + 10.0,
-                    evidence_snippet=p.point
+    if gemini_notes and gemini_notes.get("key_takeaways"):
+        for idx, pt in enumerate(gemini_notes["key_takeaways"], start=1):
+            mem_important_points.append(
+                MemoryImportantPoint(
+                    point=pt,
+                    timestamp=0.0,
+                    importance="high",
+                    provenance=create_derived_provenance(
+                        start=0.0,
+                        end=duration_sec,
+                        evidence_snippet=pt
+                    )
                 )
             )
-        )
+    else:
+        for idx, p in enumerate(understanding.important_points, start=1):
+            pt_start = float(p.timestamp_start or 0.0)
+            mem_important_points.append(
+                MemoryImportantPoint(
+                    point=p.point,
+                    timestamp=pt_start,
+                    importance=p.importance or "high",
+                    provenance=create_derived_provenance(
+                        start=pt_start,
+                        end=pt_start + 10.0,
+                        evidence_snippet=p.point
+                    )
+                )
+            )
 
     if not mem_important_points:
         mem_important_points.append(
@@ -431,21 +627,41 @@ def process_uploaded_lecture_video(
         )
 
     mem_questions: List[MemoryQuestionCandidate] = []
-    for idx, q in enumerate(understanding.question_candidates, start=1):
-        q_ts = float(q.relevant_timestamp or 0.0)
-        mem_questions.append(
-            MemoryQuestionCandidate(
-                question=q.question,
-                answer=q.expected_answer,
-                difficulty=q.difficulty or "medium",
-                timestamp=q_ts,
-                provenance=create_derived_provenance(
-                    start=q_ts,
-                    end=q_ts + 10.0,
-                    evidence_snippet=q.question
+    if gemini_notes and gemini_notes.get("revision_questions"):
+        for idx, q in enumerate(gemini_notes["revision_questions"], start=1):
+            q_text = q.get("question", "")
+            if not q_text:
+                continue
+            q_ts = float(q.get("timestamp", 0.0))
+            mem_questions.append(
+                MemoryQuestionCandidate(
+                    question=q_text,
+                    answer=q.get("answer", "Refer to classroom discussion notes and board derivations."),
+                    difficulty=q.get("difficulty", "medium"),
+                    timestamp=q_ts,
+                    provenance=create_derived_provenance(
+                        start=q_ts,
+                        end=q_ts + 10.0,
+                        evidence_snippet=q_text
+                    )
                 )
             )
-        )
+    else:
+        for idx, q in enumerate(understanding.question_candidates, start=1):
+            q_ts = float(q.relevant_timestamp or 0.0)
+            mem_questions.append(
+                MemoryQuestionCandidate(
+                    question=q.question,
+                    answer=q.expected_answer,
+                    difficulty=q.difficulty or "medium",
+                    timestamp=q_ts,
+                    provenance=create_derived_provenance(
+                        start=q_ts,
+                        end=q_ts + 10.0,
+                        evidence_snippet=q.question
+                    )
+                )
+            )
 
     if not mem_questions:
         mem_questions.append(
@@ -462,6 +678,25 @@ def process_uploaded_lecture_video(
             )
         )
 
+    # Compile diagrams from Gemini Vision frame analysis + Gemini synthesized pedagogical diagrams
+    all_diagrams: List[Dict[str, Any]] = []
+    seen_diagram_titles = set()
+    for d in gemini_diagrams:
+        title_key = d.get("title", "").strip().lower()
+        if title_key and title_key not in seen_diagram_titles:
+            seen_diagram_titles.add(title_key)
+            all_diagrams.append(d)
+        elif not title_key:
+            all_diagrams.append(d)
+
+    if gemini_notes and gemini_notes.get("diagrams"):
+        for d in gemini_notes["diagrams"]:
+            title_key = d.get("title", "").strip().lower()
+            if title_key and title_key not in seen_diagram_titles:
+                seen_diagram_titles.add(title_key)
+                all_diagrams.append(d)
+            elif not title_key:
+                all_diagrams.append(d)
 
     # Timeline events for interactive playback
     timeline_events: List[MemoryTimelineEvent] = []
@@ -506,6 +741,7 @@ def process_uploaded_lecture_video(
         equations=mem_equations,
         important_points=mem_important_points,
         revision_questions=mem_questions,
+        diagrams=all_diagrams,
         visual_references=[
             MemoryVisualReference(
                 timestamp=float(ve["timestamp"]),
@@ -548,13 +784,20 @@ def process_uploaded_lecture_video(
     except Exception as e:
         logger.warning(f"Semantic indexing notice: {e}")
 
+    model_name = "gemini-2.5-flash + llama3.2:3b" if use_gemini else (understanding.model_name or "ollama/llama3.2:3b")
+
     return {
         "status": "success",
         "session_id": session_id,
         "title": lecture_title,
         "duration": round(duration_sec, 2),
-        "model_used": understanding.model_name or "ollama/llama3.2:3b",
+        "model_used": model_name,
         "languages": detected_langs,
+        "teacher_present": teacher_present,
+        "board_present": board_present,
+        "aligned_insights": aligned_insights,
+        "diagrams": all_diagrams,
+        "gemini_pool_status": gemini_pool.get_stats() if gemini_pool else None,
         "speech_segments": speech_segments,
         "visual_events": visual_events,
         "concepts": [c.model_dump() for c in mem_concepts],

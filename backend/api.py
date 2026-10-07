@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 import shutil
 import threading
 import time
@@ -47,9 +48,17 @@ app.add_middleware(
 )
 
 # Ensure keyframes and upload directories exist and mount static route
-keyframes_dir = Path("video_engine/recordings/keyframes")
+if Path("video_engine").exists():
+    keyframes_dir = Path("video_engine/recordings/keyframes")
+    uploads_dir = Path("video_engine/recordings/uploads")
+elif Path("backend/video_engine").exists():
+    keyframes_dir = Path("backend/video_engine/recordings/keyframes")
+    uploads_dir = Path("backend/video_engine/recordings/uploads")
+else:
+    keyframes_dir = Path("video_engine/recordings/keyframes")
+    uploads_dir = Path("video_engine/recordings/uploads")
+
 keyframes_dir.mkdir(parents=True, exist_ok=True)
-uploads_dir = Path("video_engine/recordings/uploads")
 uploads_dir.mkdir(parents=True, exist_ok=True)
 
 app.mount("/api/video/keyframes", StaticFiles(directory=str(keyframes_dir)), name="keyframes")
@@ -365,12 +374,14 @@ async def upload_lecture_video(
     file: UploadFile = File(...),
     title: Optional[str] = Form(None),
     subject: Optional[str] = Form("Classroom Lecture"),
+    gemini_api_keys: Optional[str] = Form(None),
 ):
     """Processes an uploaded video file:
     1. Extracts audio & runs multilingual Whisper transcription (EN, HI, BN).
     2. Runs frame-by-frame chalkboard change detection & RapidOCR equation/text recognition.
-    3. Fuses speech + visual events and synthesizes notes with local Llama 3.2.
-    4. Saves canonical LectureMemory & indexes into vector retriever.
+    3. Fuses speech + visual events with Gemini Vision & Multimodal temporal alignment.
+    4. Cooperatively synthesizes notes and revision questions with Gemini + Llama 3.2.
+    5. Saves canonical LectureMemory with visual diagrams & indexes into vector retriever.
     """
     try:
         session_id = f"upload_{int(time.time())}"
@@ -382,12 +393,20 @@ async def upload_lecture_video(
 
         lecture_title = title.strip() if title and title.strip() else (file.filename or "Recorded Lecture").rsplit(".", 1)[0]
 
+        parsed_gemini_keys = None
+        if gemini_api_keys:
+            raw_keys = [k.strip() for k in re.split(r'[,;\n\r\s]+', gemini_api_keys) if k.strip()]
+            if raw_keys:
+                parsed_gemini_keys = raw_keys
+                logger.info(f"Received {len(parsed_gemini_keys)} Gemini API key(s) for upload session {session_id}")
+
         result = await asyncio.to_thread(
             process_uploaded_lecture_video,
             video_path=saved_video_path,
             title=lecture_title,
             session_id=session_id,
-            subject=subject or "Classroom Lecture"
+            subject=subject or "Classroom Lecture",
+            gemini_api_keys=parsed_gemini_keys
         )
         return result
     except Exception as e:
