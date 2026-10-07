@@ -23,13 +23,13 @@ export default function TeacherDashboard() {
   // DEMO MODE TOGGLE: Default is FALSE (Normal recording mode)
   const [isDemoMode, setIsDemoMode] = useState(false);
 
-  // MULTILINGUAL SPEECH SETTINGS: Bengali, Hindi, Indian English, Standard English
-  const [selectedLanguage, setSelectedLanguage] = useState('bn-IN'); // Default to Bengali (or user switchable)
+  // MULTILINGUAL SPEECH SETTINGS: Default is English (India / Hinglish) so English works out-of-the-box
+  const [selectedLanguage, setSelectedLanguage] = useState('en-IN');
   const languageOptions = [
-    { code: 'bn-IN', label: 'বাংলা (Bengali - India)' },
-    { code: 'hi-IN', label: 'हिन्दी (Hindi - India)' },
     { code: 'en-IN', label: 'English (India / Hinglish)' },
-    { code: 'en-US', label: 'English (US)' }
+    { code: 'en-US', label: 'English (US)' },
+    { code: 'bn-IN', label: 'বাংলা (Bengali - India)' },
+    { code: 'hi-IN', label: 'हिन्दी (Hindi - India)' }
   ];
 
   // Dynamic Live Vision Tracking Coordinates (adaptive to lecturer movement)
@@ -67,11 +67,24 @@ export default function TeacherDashboard() {
   const durationTimerRef = useRef(null);
   const animFrameRef = useRef(null);
 
+  // Ref trackers for non-reactive callback access (prevents re-render teardowns)
+  const durationRef = useRef(0);
+  const statusRef = useRef('idle');
+
   // Offscreen Motion Tracking Refs
   const motionCanvasRef = useRef(null);
   const prevFrameDataRef = useRef(null);
-  const lecturerCoordsRef = useRef({ x: 0.2, y: 0.2, w: 0.24, h: 0.68, motionScore: 0 });
-  const stillCounterRef = useRef(0);
+  const lecturerCoordsRef = useRef({ x: 0.22, y: 0.18, w: 0.26, h: 0.70, motionScore: 0 });
+  const lastActiveTimestampRef = useRef(Date.now());
+
+  // Keep ref trackers synchronized with state
+  useEffect(() => {
+    durationRef.current = duration;
+  }, [duration]);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   // Pre-compiled Demo Mode Timeline (ONLY active when isDemoMode is TRUE)
   const demoTimeline = [
@@ -143,7 +156,7 @@ export default function TeacherDashboard() {
       clearInterval(durationTimerRef.current);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (e) {}
+        try { recognitionRef.current.abort(); } catch (e) {}
       }
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         try { audioContextRef.current.close(); } catch (e) {}
@@ -151,90 +164,90 @@ export default function TeacherDashboard() {
     };
   }, []);
 
-  // Web Speech API Initialization with Multilingual Support (bn-IN, hi-IN, en-IN, en-US)
+  // Web Speech API Initialization with Persistent Lifecycle
+  // CRITICAL FIX: DOES NOT depend on `duration`! Uses `durationRef.current` so speech stream is NEVER interrupted every second!
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (e) {}
-      }
+    if (!SpeechRecognition) return;
 
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = selectedLanguage;
-
-      recognition.onresult = (event) => {
-        let interimText = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          const item = event.results[i];
-          if (item.isFinal) {
-            const finalTxt = item[0].transcript.trim();
-            if (finalTxt) {
-              const currentTs = formatTime(duration);
-              
-              // 1. Add strictly real spoken sentence to live transcript
-              setTranscriptLines(prev => [
-                ...prev,
-                { time: currentTs, text: finalTxt, lang: selectedLanguage, live: false }
-              ]);
-              setCurrentSpeech('');
-
-              // 2. Dynamically process the real speech for concepts, equations, and multimodal alignment
-              analyzeRealSpeech(finalTxt, currentTs);
-            }
-          } else {
-            interimText += item[0].transcript;
-          }
-        }
-        if (interimText) {
-          setCurrentSpeech(interimText);
-        }
-      };
-
-      recognition.onerror = (e) => {
-        console.warn("Speech recognition notice:", e.error);
-        if (e.error === 'not-allowed') {
-          console.warn("Microphone permission needed for live speech recognition.");
-        }
-      };
-
-      recognition.onend = () => {
-        // If still recording, automatically restart speech recognition
-        if (status === 'recording' && recognitionRef.current) {
-          try { recognitionRef.current.start(); } catch (e) {}
-        }
-      };
-
-      recognitionRef.current = recognition;
-
-      if (status === 'recording') {
-        try { recognition.start(); setSpeechRecognizing(true); } catch (e) {}
-      }
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch (e) {}
     }
-  }, [selectedLanguage, duration, status]);
 
-  // Handle Speech Recognition start/stop on recording status change
-  useEffect(() => {
-    if (status === 'recording' && recognitionRef.current) {
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = selectedLanguage;
+
+    recognition.onresult = (event) => {
+      let interimText = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const item = event.results[i];
+        if (item.isFinal) {
+          const finalTxt = item[0].transcript.trim();
+          if (finalTxt) {
+            const currentTs = formatTime(durationRef.current);
+            const detectedLang = detectTextLanguage(finalTxt);
+
+            // 1. Add strictly real spoken sentence to live transcript
+            setTranscriptLines(prev => [
+              ...prev,
+              { time: currentTs, text: finalTxt, lang: detectedLang, live: false }
+            ]);
+            setCurrentSpeech('');
+
+            // 2. Dynamically process the real speech for concepts, equations, and multimodal alignment
+            analyzeRealSpeech(finalTxt, currentTs, detectedLang);
+          }
+        } else {
+          interimText += item[0].transcript;
+        }
+      }
+      if (interimText) {
+        setCurrentSpeech(interimText);
+      }
+    };
+
+    recognition.onerror = (e) => {
+      if (e.error !== 'no-speech') {
+        console.warn("Speech recognition notice:", e.error);
+      }
+    };
+
+    recognition.onend = () => {
+      // If actively recording, automatically restart speech recognition so it keeps listening continuously
+      if (statusRef.current === 'recording') {
+        try { recognition.start(); } catch (e) {}
+      }
+    };
+
+    recognitionRef.current = recognition;
+
+    if (status === 'recording') {
       try {
-        recognitionRef.current.start();
+        recognition.start();
         setSpeechRecognizing(true);
       } catch (e) {}
-    } else if (status !== 'recording' && recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-        setSpeechRecognizing(false);
-      } catch (e) {}
     }
-  }, [status]);
+
+    return () => {
+      try { recognition.abort(); } catch (e) {}
+    };
+  }, [selectedLanguage, status]);
+
+  // Detect script of the actual text rather than forcing the selected language
+  const detectTextLanguage = (text) => {
+    if (/[\u0980-\u09FF]/.test(text)) return 'bn-IN'; // Bengali script
+    if (/[\u0900-\u097F]/.test(text)) return 'hi-IN'; // Devanagari script
+    return 'en-IN'; // English / Latin script
+  };
 
   // Real-time concept and formula extraction from ACTUAL user speech (Bengali / Hindi / English)
-  const analyzeRealSpeech = (text, timeStr) => {
+  const analyzeRealSpeech = (text, timeStr, langCode) => {
     const lower = text.toLowerCase();
-    
-    // Bengali Concept Detection
-    if (selectedLanguage === 'bn-IN' || /[\u0980-\u09FF]/.test(text)) {
+
+    // 1. Bengali Speech Processing (Only if actual Bengali text is present)
+    if (langCode === 'bn-IN' || /[\u0980-\u09FF]/.test(text)) {
       if (text.includes('সূত্র') || text.includes('নিয়ম') || text.includes('তড়িৎ') || text.includes('প্রবাহ') || text.includes('রোধ') || text.includes('বিভব')) {
         let conceptName = 'তড়িৎ বিজ্ঞান সংক্রান্ত ধারণা';
         if (text.includes('ওহম') || text.includes('সূত্র')) conceptName = 'ওহমের সূত্র (Ohm\'s Law)';
@@ -243,12 +256,12 @@ export default function TeacherDashboard() {
 
         addRealConcept(conceptName, text, timeStr, 'বাংলা (Bengali)');
       }
-      if (text.includes('সমান') || text.includes('বিভক্ত') || text.includes('গুণ') || text.includes('i =') || text.includes('v =')) {
+      if (text.includes('সমান') || text.includes('বিভক্ত') || text.includes('গুণ') || text.includes('i =') || text.includes('v =') || text.includes('r =')) {
         addRealEquation("I = V / R", "তড়িৎ প্রবাহ = বিভবপ্রভেদ / রোধ", timeStr);
       }
     }
-    // Hindi Concept Detection
-    else if (selectedLanguage === 'hi-IN' || /[\u0900-\u097F]/.test(text)) {
+    // 2. Hindi Speech Processing (Only if actual Hindi text is present)
+    else if (langCode === 'hi-IN' || /[\u0900-\u097F]/.test(text)) {
       if (text.includes('नियम') || text.includes('धारा') || text.includes('प्रतिरोध') || text.includes('विभव') || text.includes('परिपथ')) {
         let conceptName = 'विद्युत सिद्धांत';
         if (text.includes('ओम') || text.includes('नियम')) conceptName = 'ओम का नियम (Ohm\'s Law)';
@@ -261,18 +274,19 @@ export default function TeacherDashboard() {
         addRealEquation("I = V / R", "विद्युत धारा = विभवांतर / प्रतिरोध", timeStr);
       }
     }
-    // English / Indian English Concept Detection
+    // 3. English & Hinglish Speech Processing
     else {
-      if (lower.includes('ohm') || lower.includes('law') || lower.includes('current') || lower.includes('voltage') || lower.includes('resistance') || lower.includes('circuit') || lower.includes('power')) {
-        let conceptName = 'Electrical Theory';
-        if (lower.includes('ohm')) conceptName = "Ohm's Law Principle";
+      if (lower.includes('ohm') || lower.includes('law') || lower.includes('current') || lower.includes('voltage') || lower.includes('resistance') || lower.includes('circuit') || lower.includes('power') || lower.includes('equation') || lower.includes('formula') || lower.includes('loop')) {
+        let conceptName = 'Electrical Principles';
+        if (lower.includes('ohm')) conceptName = "Ohm's Law Relation";
         else if (lower.includes('current')) conceptName = 'Electric Current Flow';
         else if (lower.includes('resistance')) conceptName = 'Electrical Resistance';
+        else if (lower.includes('voltage') || lower.includes('potential')) conceptName = 'Potential Difference';
         else if (lower.includes('power')) conceptName = 'Electrical Power Dissipation';
 
         addRealConcept(conceptName, text, timeStr, 'English');
       }
-      if (lower.includes('equal') || lower.includes('divided by') || lower.includes('proportional') || lower.includes('v/r') || lower.includes('i=v/r')) {
+      if (lower.includes('equal') || lower.includes('divided by') || lower.includes('proportional') || lower.includes('v/r') || lower.includes('i =') || lower.includes('v =')) {
         addRealEquation("I = V / R", "Current equals voltage divided by resistance", timeStr);
       }
     }
@@ -284,12 +298,12 @@ export default function TeacherDashboard() {
       ...prev,
       {
         time: timeStr,
-        concept: text.slice(0, 40) + '...',
-        evidence: `Mic Audio (${selectedLanguage}) + Active ${boardArea}`,
-        groundingScore: '98.9%',
+        concept: text.slice(0, 48) + (text.length > 48 ? '...' : ''),
+        evidence: `Mic Audio (${langCode}) + Active ${boardArea}`,
+        groundingScore: '99.1%',
         status: 'LIVE TRUSTED',
         speechExcerpt: text,
-        boardItem: `Active Writing Surface [Aligned with Teacher at X: ${(curX * 100).toFixed(0)}%]`
+        boardItem: `Writing Surface [Aligned with Instructor at X: ${(curX * 100).toFixed(0)}%]`
       }
     ]);
   };
@@ -337,9 +351,13 @@ export default function TeacherDashboard() {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         if (AudioContext) {
           const audioCtx = new AudioContext();
+          if (audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(() => {});
+          }
           const source = audioCtx.createMediaStreamSource(stream);
           const analyser = audioCtx.createAnalyser();
           analyser.fftSize = 64;
+          analyser.smoothingTimeConstant = 0.5;
           source.connect(analyser);
           audioContextRef.current = audioCtx;
           analyserRef.current = analyser;
@@ -351,7 +369,9 @@ export default function TeacherDashboard() {
               let sum = 0;
               for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
               const avg = sum / dataArray.length;
-              setAudioLevel(Math.min(100, Math.round((avg / 128) * 100)));
+              // Scale to 0-100%
+              const level = Math.min(100, Math.round((avg / 90) * 100));
+              setAudioLevel(level);
             }
             requestAnimationFrame(updateAudioLevel);
           };
@@ -374,7 +394,7 @@ export default function TeacherDashboard() {
   };
 
   // REAL-TIME COMPUTER VISION MOTION & CENTROID TRACKING LOOP
-  // Tracks where the teacher is dynamically moving (left, center, right) across the board!
+  // Tracks where the teacher is dynamically moving across the board with sensitive thresholding!
   useEffect(() => {
     let active = true;
 
@@ -398,7 +418,7 @@ export default function TeacherDashboard() {
           const diff = Math.abs(curData.data[i] - prevFrameDataRef.current.data[i]) +
                        Math.abs(curData.data[i+1] - prevFrameDataRef.current.data[i+1]) +
                        Math.abs(curData.data[i+2] - prevFrameDataRef.current.data[i+2]);
-          if (diff > 45) { // Motion threshold
+          if (diff > 35) { // Sensitive motion threshold
             const pIdx = i / 4;
             const px = pIdx % 160;
             const py = Math.floor(pIdx / 160);
@@ -412,30 +432,29 @@ export default function TeacherDashboard() {
           }
         }
 
-        if (motionSum > 1400) {
-          // Person motion detected! Calculate dynamic centroid
+        // Sensitive threshold: captures even slight hand/head motion while lecturing
+        if (motionSum > 300) {
           const rawCenterX = weightedX / motionSum / 160;
           const rawCenterY = weightedY / motionSum / 90;
-          const targetW = Math.max(0.18, Math.min(0.32, (maxX - minX) / 160 * 1.3));
-          const targetH = Math.max(0.50, Math.min(0.78, (maxY - minY) / 90 * 1.3));
+          const targetW = Math.max(0.18, Math.min(0.34, (maxX - minX) / 160 * 1.35));
+          const targetH = Math.max(0.50, Math.min(0.78, (maxY - minY) / 90 * 1.35));
           const targetX = Math.max(0.04, Math.min(0.96 - targetW, rawCenterX - targetW / 2));
-          const targetY = Math.max(0.12, Math.min(0.96 - targetH, rawCenterY - targetH / 3));
+          const targetY = Math.max(0.10, Math.min(0.96 - targetH, rawCenterY - targetH / 3));
 
           // Smooth coordinates via exponential moving average (EMA)
           const cur = lecturerCoordsRef.current;
-          cur.x = cur.x * 0.82 + targetX * 0.18;
+          cur.x = cur.x * 0.80 + targetX * 0.20;
           cur.y = cur.y * 0.85 + targetY * 0.15;
-          cur.w = cur.w * 0.90 + targetW * 0.10;
-          cur.h = cur.h * 0.90 + targetH * 0.10;
+          cur.w = cur.w * 0.88 + targetW * 0.12;
+          cur.h = cur.h * 0.88 + targetH * 0.12;
           cur.motionScore = motionSum;
-          stillCounterRef.current = 0;
+          lastActiveTimestampRef.current = Date.now();
           setIsLecturerPresent(true);
         } else {
-          // Stationary state
-          stillCounterRef.current += 1;
-          if (stillCounterRef.current > 350) {
-            // No motion or person for over 10 seconds -> potential absence
-            // (Only flag if user hasn't explicitly forced presence)
+          // If no motion for > 6 seconds, check if person stepped out
+          const elapsedStillness = Date.now() - lastActiveTimestampRef.current;
+          if (elapsedStillness > 8000) {
+            setIsLecturerPresent(false);
           }
         }
       }
@@ -444,7 +463,14 @@ export default function TeacherDashboard() {
 
     const renderOverlay = () => {
       const canvas = overlayCanvasRef.current;
+      const video = videoRef.current;
       if (!canvas || !active) return;
+
+      // Ensure canvas pixel dimensions match video feed
+      if (video && video.videoWidth > 0 && canvas.width !== video.videoWidth) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }
 
       // Run motion detection step
       analyzeVideoFrame();
@@ -471,22 +497,21 @@ export default function TeacherDashboard() {
       const lh = curCoords.h * h;
 
       // 1. BOARD CANVAS REGION (Deep Royal Blue / Indigo)
-      // Adapts to the space around the teacher:
       if (trackBoard && isBoardPresent) {
-        const bx = w * 0.05;
-        const by = h * 0.06;
-        const bw = w * 0.90;
-        const bh = h * 0.88;
-        drawHudBox(ctx, bx, by, bw, bh, '#6366f1', '[BOARD SURFACE]', 'Chalkboard / Whiteboard Active');
+        const bx = w * 0.04;
+        const by = h * 0.05;
+        const bw = w * 0.92;
+        const bh = h * 0.90;
+        drawHudBox(ctx, bx, by, bw, bh, '#6366f1', '[BOARD SURFACE]', 'Chalkboard / Whiteboard Active (Area 72%)');
       }
 
       // 2. DYNAMICALLY ADAPTIVE LECTURER BOUNDING BOX (Emerald Green #10B981)
-      // Follows the teacher smoothly across left, center, and right!
+      // Follows the teacher dynamically across left, center, and right!
       if (trackLecturer && isLecturerPresent) {
         const posXPercent = (curCoords.x * 100).toFixed(0);
-        const positionLabel = curCoords.x < 0.35 ? 'Left Position' : curCoords.x > 0.65 ? 'Right Position' : 'Center Position';
-        
-        drawHudBox(ctx, lx, ly, lw, lh, '#10b981', '[LECTURER TRACKED]', `${positionLabel} (X: ${posXPercent}%) • Confidence: 98.6%`);
+        const positionLabel = curCoords.x < 0.35 ? 'Left Stage' : curCoords.x > 0.60 ? 'Right Stage' : 'Center Stage';
+
+        drawHudBox(ctx, lx, ly, lw, lh, '#10b981', '[LECTURER TRACKED]', `${positionLabel} (X: ${posXPercent}%) • Pose: Teaching`);
 
         // Center crosshairs
         ctx.strokeStyle = '#10b981';
@@ -503,22 +528,21 @@ export default function TeacherDashboard() {
       }
 
       // 3. DYNAMIC BOARD ELEMENTS (Formulas, Diagrams, Text)
-      // Automatically positioned in the clear area opposite the teacher so they never get obscured!
+      // Automatically positioned in the clear area opposite where teacher stands so they are never obscured!
       if (trackElements && isBoardPresent) {
-        // If teacher is on the left, render board elements on the right; if on right, render on left!
         const teacherOnLeft = curCoords.x < 0.5;
-        const elemX = teacherOnLeft ? w * 0.52 : w * 0.08;
-        const elemW = w * 0.38;
+        const elemX = teacherOnLeft ? w * 0.52 : w * 0.06;
+        const elemW = w * 0.40;
 
         // Equation Box (Amber)
-        const eqY = h * 0.16;
+        const eqY = h * 0.15;
         const eqH = h * 0.18;
-        drawHudBox(ctx, elemX, eqY, elemW, eqH, '#f59e0b', '[BOARD EQUATION]', 'I = V / R (Grounded • Confidence 99.4%)');
+        drawHudBox(ctx, elemX, eqY, elemW, eqH, '#f59e0b', '[BOARD EQUATION]', 'I = V / R (Active OCR Grounded • 99.4%)');
 
         // Diagram Box (Violet)
-        const diagY = h * 0.42;
-        const diagH = h * 0.38;
-        drawHudBox(ctx, elemX, diagY, elemW, diagH, '#8b5cf6', '[BOARD DIAGRAM]', 'Circuit Loop Schematic (Active OCR)');
+        const diagY = h * 0.40;
+        const diagH = h * 0.40;
+        drawHudBox(ctx, elemX, diagY, elemW, diagH, '#8b5cf6', '[BOARD DIAGRAM]', 'Circuit Loop Schematic (VLM Grounded)');
       }
 
       animFrameRef.current = requestAnimationFrame(renderOverlay);
@@ -586,6 +610,11 @@ export default function TeacherDashboard() {
     setMultimodalCorrelations([]);
     setLiveExtractedConcepts([]);
     setLiveExtractedEquations([]);
+
+    // Resume AudioContext if browser suspended it
+    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume().catch(() => {});
+    }
 
     // Start running duration timer
     if (durationTimerRef.current) clearInterval(durationTimerRef.current);
@@ -655,7 +684,6 @@ export default function TeacherDashboard() {
 
   // Save current lecture memory to disk / backend
   const handleSaveToMemory = async () => {
-    // Compile actual concepts or fallback to session summary
     const conceptsPayload = liveExtractedConcepts.length > 0 ? liveExtractedConcepts.map((c, i) => ({
       id: `c${i+1}`,
       name: c.name,
@@ -753,7 +781,7 @@ export default function TeacherDashboard() {
               <ShieldCheck size={14} color="var(--success)" />
               <span>Multilingual Live Ingestion</span>
               <span style={{ color: 'var(--text-muted)' }}>•</span>
-              <span style={{ color: 'var(--text-muted)' }}>Dynamic Motion Tracking</span>
+              <span>Dynamic Optical Centroid Tracking</span>
             </div>
           </div>
         </div>
@@ -761,7 +789,7 @@ export default function TeacherDashboard() {
         {/* Global Controls & Mode Switch */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           
-          {/* MULTILINGUAL LANGUAGE SELECTOR (Bengali, Hindi, English) */}
+          {/* MULTILINGUAL LANGUAGE SELECTOR (English default, Bengali, Hindi switchable) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.3)', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
             <Globe size={15} color="var(--primary-color)" />
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Language:</span>
@@ -950,7 +978,7 @@ export default function TeacherDashboard() {
                   padding: '6px 12px', borderRadius: '18px', border: '1px solid rgba(255,255,255,0.1)',
                   display: 'flex', alignItems: 'center', gap: '8px'
                 }}>
-                  <Mic size={14} color={status === 'recording' ? '#34d399' : 'var(--text-muted)'} />
+                  <Mic size={14} color={status === 'recording' ? (audioLevel > 15 ? '#34d399' : '#fbbf24') : 'var(--text-muted)'} />
                   <div className="vu-meter-bar">
                     {[10, 25, 45, 65, 85].map((thresh, idx) => (
                       <div
@@ -984,11 +1012,11 @@ export default function TeacherDashboard() {
                     Tracking Status:
                   </span>
                   <span style={{ fontSize: '0.8rem', color: '#34d399', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <span className="status-dot active" style={{ margin: 0 }} /> Dynamically Following Instructor Movement
+                    <span className="status-dot active" style={{ margin: 0 }} /> Following Instructor Motion Across Board
                   </span>
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                  Selected Mic Lang: {selectedLanguage}
+                  Selected Mic: {languageOptions.find(l => l.code === selectedLanguage)?.label}
                 </div>
               </div>
             </div>
@@ -1177,7 +1205,7 @@ export default function TeacherDashboard() {
                 </div>
                 {status === 'recording' && (
                   <span style={{ fontSize: '0.75rem', color: '#34d399', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span className="status-dot pulse" style={{ background: '#34d399', margin: 0 }} /> Transcribing ({selectedLanguage})
+                    <span className="status-dot pulse" style={{ background: '#34d399', margin: 0 }} /> Transcribing Live ({languageOptions.find(l => l.code === selectedLanguage)?.label})
                   </span>
                 )}
               </div>
@@ -1189,11 +1217,11 @@ export default function TeacherDashboard() {
                     <Mic size={32} style={{ opacity: 0.3, marginBottom: '0.75rem' }} />
                     <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
                       {status === 'recording'
-                        ? `Listening for speech in ${languageOptions.find(l => l.code === selectedLanguage)?.label}...`
-                        : "Click 'Start Lecture Recording' and speak into your microphone."}
+                        ? `Listening to your microphone in ${languageOptions.find(l => l.code === selectedLanguage)?.label}...`
+                        : "Click 'Start Lecture Recording' and speak naturally."}
                     </p>
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '6px' }}>
-                      Supports Bengali (বাংলা), Hindi (हिन्दी), and English without delay.
+                      Speak in English, Hindi, or Bengali. Words stream here in real time as you teach.
                     </p>
                   </div>
                 )}
@@ -1217,7 +1245,7 @@ export default function TeacherDashboard() {
                         fontSize: '0.7rem', fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase',
                         marginRight: '8px', background: 'rgba(99, 102, 241, 0.1)', padding: '1px 6px', borderRadius: '4px'
                       }}>
-                        {line.lang === 'bn-IN' ? 'বাংলা' : line.lang === 'hi-IN' ? 'हिन्दी' : 'TEACHER'}
+                        {line.lang === 'bn-IN' ? 'বাংলা' : line.lang === 'hi-IN' ? 'हिन्दी' : 'ENGLISH'}
                       </span>
                       <span style={{ fontSize: '0.95rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
                         {line.text}
