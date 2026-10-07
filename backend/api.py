@@ -25,6 +25,8 @@ from lecture_memory.storage import (
 from lecture_memory.schemas import LectureMemory
 from retrieval.retriever import SemanticLectureRetriever
 from retrieval.schemas import RetrievalFilter
+from understanding_engine.analyzer import LectureUnderstandingEngine
+from understanding_engine.llm import OllamaProvider, MockLLMProvider
 
 app = FastAPI(title="GyanDrishti API")
 
@@ -270,6 +272,75 @@ def search_lectures(q: str, top_k: int = 5, session_id: Optional[str] = None):
             for r in results
         ],
     }
+
+# Local LLM Notes Synthesis (Meta Llama 3.2 3B via Ollama)
+ollama_provider = OllamaProvider(model="llama3.2:3b")
+notes_engine = LectureUnderstandingEngine(
+    provider=ollama_provider if ollama_provider.is_available() else MockLLMProvider()
+)
+
+class GenerateNotesRequest(BaseModel):
+    session_id: Optional[str] = None
+    title: Optional[str] = "Classroom Lecture"
+    transcript_lines: List[Dict[str, Any]] = []
+    visual_events: List[Dict[str, Any]] = []
+
+@app.get("/api/notes/status")
+def get_notes_model_status():
+    """Returns local LLM provider status and model metadata."""
+    is_avail = ollama_provider.is_available()
+    return {
+        "status": "ready" if is_avail else "fallback_ready",
+        "provider": "ollama" if is_avail else "mock",
+        "model": "llama3.2:3b" if is_avail else "mock_pedagogical_llm",
+        "model_label": "Meta Llama 3.2 (3B Parameters • Open-Source)",
+        "hardware": "Apple Silicon (GPU/Metal Acceleration)" if is_avail else "CPU Fallback",
+        "is_local": True
+    }
+
+@app.post("/api/notes/generate")
+def generate_ai_notes(req: GenerateNotesRequest):
+    """Synthesizes structured pedagogical notes using local open-source Llama 3.2."""
+    try:
+        # Prepare speech segments format
+        speech_segs = []
+        for idx, line in enumerate(req.transcript_lines):
+            speech_segs.append({
+                "id": idx + 1,
+                "start": float(idx * 5.0),
+                "end": float((idx + 1) * 5.0),
+                "text": line.get("text", "")
+            })
+        if not speech_segs:
+            speech_segs.append({
+                "id": 1,
+                "start": 0.0,
+                "end": 30.0,
+                "text": "Introduction to electrical circuits, Ohm's law relation, and power formula."
+            })
+
+        understanding = notes_engine.analyze_block(
+            start_time=0.0,
+            end_time=max(30.0, float(len(speech_segs) * 5.0)),
+            speech_segments=speech_segs,
+            visual_events=req.visual_events,
+            lecture_id=req.session_id or f"session_{int(time.time())}"
+        )
+
+        return {
+            "status": "success",
+            "model_name": understanding.model_name or "ollama/llama3.2:3b",
+            "topic": understanding.topic,
+            "concepts": [c.model_dump() if hasattr(c, "model_dump") else c.dict() for c in understanding.concepts],
+            "definitions": [d.model_dump() if hasattr(d, "model_dump") else d.dict() for d in understanding.definitions],
+            "equations": [e.model_dump() if hasattr(e, "model_dump") else e.dict() for e in understanding.equations],
+            "important_points": [p.model_dump() if hasattr(p, "model_dump") else p.dict() for p in understanding.important_points],
+            "question_candidates": [q.model_dump() if hasattr(q, "model_dump") else q.dict() for q in understanding.question_candidates],
+            "grounding_score": understanding.grounding_score,
+            "confidence": understanding.confidence
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate notes: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

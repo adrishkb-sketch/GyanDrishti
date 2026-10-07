@@ -49,3 +49,19 @@ export async function saveLectureMemory(data) {
   if (!res.ok) throw new Error('Failed to save lecture memory');
   return res.json();
 }
+
+export async function getNotesModelStatus() {
+  const res = await fetch('http://localhost:8000/api/notes/status');
+  if (!res.ok) throw new Error('Failed to fetch AI notes model status');
+  return res.json();
+}
+
+export async function generateAINotes(payload) {
+  const res = await fetch('http://localhost:8000/api/notes/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('Failed to generate AI notes');
+  return res.json();
+}
